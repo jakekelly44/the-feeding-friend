@@ -2,11 +2,20 @@ import Link from 'next/link';
 import { Plus, Bell, ChevronRight, PawPrint } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 
+// Define the Profile type
+type Profile = {
+  id: string;
+  full_name: string | null;
+  email: string;
+  created_at: string;
+  updated_at: string;
+} | null;
+
 export default async function HomePage() {
   const supabase = createClient();
   
   const { data: { user } } = await supabase.auth.getUser();
-  const { data: profile } = await supabase
+  const { data: profile }: { data: Profile } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', user!.id)
@@ -95,27 +104,4 @@ export default async function HomePage() {
           className="flex items-center justify-center gap-2 py-4 border-2 border-dashed border-gray-200 rounded-card text-gray-400 hover:border-deep-teal-200 hover:text-deep-teal transition-colors"
         >
           <Plus className="w-5 h-5" />
-          <span className="font-medium">Add Another Pet</span>
-        </Link>
-      </div>
-
-      {/* Empty State */}
-      {(!pets || pets.length === 0) && (
-        <div className="text-center py-12">
-          <div className="w-20 h-20 bg-deep-teal-50 rounded-full flex items-center justify-center mx-auto mb-4">
-            <PawPrint className="w-10 h-10 text-deep-teal" />
-          </div>
-          <h3 className="font-bold text-charcoal mb-2">No pets yet</h3>
-          <p className="text-gray-500 mb-6">Add your first pet to get started with meal planning.</p>
-          <Link
-            href="/calculator"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-deep-teal text-white font-semibold rounded-button hover:bg-deep-teal-600 transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-            Add Your First Pet
-          </Link>
-        </div>
-      )}
-    </div>
-  );
-}
+          <span className="font-medium">Add Another Pet</
