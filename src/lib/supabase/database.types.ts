@@ -467,6 +467,7 @@ export type Database = {
 export type Profile = Database['public']['Tables']['profiles']['Row'];
 export type Pet = Database['public']['Tables']['pets']['Row'];
 export type PetInsert = Database['public']['Tables']['pets']['Insert'];
+export type PetUpdate = Database['public']['Tables']['pets']['Update'];
 export type WeightEntry = Database['public']['Tables']['weight_entries']['Row'];
 export type Item = Database['public']['Tables']['items']['Row'];
 export type ItemInsert = Database['public']['Tables']['items']['Insert'];

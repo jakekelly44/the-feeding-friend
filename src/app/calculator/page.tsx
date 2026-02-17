@@ -12,7 +12,7 @@ import type {
   Species, ActivityMethod, ActivityCategory, ActivityPace, 
   LifeStage, OutdoorExposure, Climate, BCS, WeightGoal 
 } from '@/lib/calculations/types';
-import type { PetInsert, Json } from '@/lib/supabase/database.types';
+import type { PetInsert, PetUpdate, Json } from '@/lib/supabase/database.types';
 
 const STEPS = ['Baseline', 'Activity', 'Life Stage', 'Environment', 'Body Condition', 'Health'];
 
@@ -213,8 +213,7 @@ function CalculatorContent() {
       return;
     }
 
-    const petData: PetInsert = {
-      user_id: user.id,
+    const sharedFields = {
       name: formData.petName,
       species: formData.species!,
       breed: formData.breed,
@@ -240,15 +239,15 @@ function CalculatorContent() {
     let dbError;
     
     if (editPetId) {
-      // Update existing pet
+      const updateData: PetUpdate = { ...sharedFields };
       const { error: updateError } = await supabase
         .from('pets')
-        .update(petData)
+        .update(updateData)
         .eq('id', editPetId);
       dbError = updateError;
     } else {
-      // Insert new pet
-      const { error: insertError } = await supabase.from('pets').insert(petData);
+      const insertData: PetInsert = { ...sharedFields, user_id: user.id };
+      const { error: insertError } = await supabase.from('pets').insert(insertData);
       dbError = insertError;
     }
 
