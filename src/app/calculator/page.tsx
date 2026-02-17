@@ -12,6 +12,7 @@ import type {
   Species, ActivityMethod, ActivityCategory, ActivityPace, 
   LifeStage, OutdoorExposure, Climate, BCS, WeightGoal 
 } from '@/lib/calculations/types';
+import type { PetInsert, Json } from '@/lib/supabase/database.types';
 
 const STEPS = ['Baseline', 'Activity', 'Life Stage', 'Environment', 'Body Condition', 'Health'];
 
@@ -212,7 +213,7 @@ function CalculatorContent() {
       return;
     }
 
-    const petData = {
+    const petData: PetInsert = {
       user_id: user.id,
       name: formData.petName,
       species: formData.species!,
@@ -233,7 +234,7 @@ function CalculatorContent() {
       health_status: formData.healthStatus,
       health_conditions: formData.healthConditions,
       daily_calories: result.mer,
-      calculation_breakdown: result.breakdown as unknown as Record<string, unknown>,
+      calculation_breakdown: result.breakdown as unknown as Json,
     };
 
     let dbError;
