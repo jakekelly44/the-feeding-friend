@@ -1,26 +1,19 @@
 import Link from 'next/link';
 import { Plus, Bell, ChevronRight, PawPrint } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
-
-type Profile = {
-  id: string;
-  full_name: string | null;
-  email: string;
-  created_at: string;
-  updated_at: string;
-} | null;
+import type { Profile, Pet } from '@/lib/supabase/database.types';
 
 export default async function HomePage() {
   const supabase = createClient();
-  
+
   const { data: { user } } = await supabase.auth.getUser();
-  const { data: profile }: { data: Profile } = await supabase
+  const { data: profile }: { data: Profile | null } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', user!.id)
     .single();
-  
-  const { data: pets } = await supabase
+
+  const { data: pets }: { data: Pet[] | null } = await supabase
     .from('pets')
     .select('*')
     .eq('user_id', user!.id)
@@ -73,7 +66,7 @@ export default async function HomePage() {
                 <p className="text-sm text-gray-500 capitalize">{pet.breed?.replace(/-/g, ' ') || pet.species}</p>
               </div>
             </div>
-            
+
             <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-50">
               <div className="text-center">
                 <p className="text-xs text-gray-400">Life Stage</p>
