@@ -233,7 +233,7 @@ function CalculatorContent() {
       health_status: formData.healthStatus,
       health_conditions: formData.healthConditions,
       daily_calories: result.mer,
-      calculation_breakdown: result.breakdown,
+      calculation_breakdown: result.breakdown as unknown as Record<string, unknown>,
     };
 
     let dbError;
