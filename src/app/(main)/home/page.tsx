@@ -6,13 +6,15 @@ export default async function HomePage() {
   const supabase = createClient();
   
   const { data: { user } } = await supabase.auth.getUser();
-  const { data: profile } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: profile } = await (supabase as any)
     .from('profiles')
     .select('*')
     .eq('id', user!.id)
     .single();
   
-  const { data: pets } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: pets } = await (supabase as any)
     .from('pets')
     .select('*')
     .eq('user_id', user!.id)

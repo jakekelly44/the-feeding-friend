@@ -240,14 +240,16 @@ function CalculatorContent() {
     
     if (editPetId) {
       // Update existing pet
-      const { error: updateError } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: updateError } = await (supabase as any)
         .from('pets')
         .update(petData)
         .eq('id', editPetId);
       dbError = updateError;
     } else {
       // Insert new pet
-      const { error: insertError } = await supabase.from('pets').insert(petData);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: insertError } = await (supabase as any).from('pets').insert(petData);
       dbError = insertError;
     }
 

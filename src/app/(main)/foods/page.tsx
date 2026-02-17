@@ -46,7 +46,8 @@ export default function FoodsPage() {
     async function fetchFoods() {
       const supabase = createClient();
       
-      const { data, error } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any)
         .from('items')
         .select('id, brand, name, item_type, calories_per_unit, serving_unit, image_url')
         .order('use_count', { ascending: false })

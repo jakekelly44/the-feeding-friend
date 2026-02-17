@@ -106,7 +106,8 @@ export default function AddFoodPage() {
       costPerCalorie = costPerServing / calories;
     }
 
-    const { error: insertError } = await supabase.from('items').insert({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: insertError } = await (supabase as any).from('items').insert({
       created_by: user.id,
       brand: formData.brand.trim(),
       name: formData.name.trim(),

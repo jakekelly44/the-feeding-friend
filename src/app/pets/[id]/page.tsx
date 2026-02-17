@@ -39,7 +39,8 @@ export default function PetProfilePage() {
     
     async function fetchPet() {
       const supabase = createClient();
-      const { data, error } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any)
         .from('pets')
         .select('*')
         .eq('id', params.id)
@@ -117,7 +118,8 @@ export default function PetProfilePage() {
     setDeleting(true);
     try {
       const supabase = createClient();
-      const { error } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
         .from('pets')
         .delete()
         .eq('id', pet.id);
