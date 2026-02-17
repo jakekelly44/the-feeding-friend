@@ -12,7 +12,6 @@ import type {
   Species, ActivityMethod, ActivityCategory, ActivityPace, 
   LifeStage, OutdoorExposure, Climate, BCS, WeightGoal 
 } from '@/lib/calculations/types';
-import type { Json } from '@/lib/supabase/database.types';
 
 const STEPS = ['Baseline', 'Activity', 'Life Stage', 'Environment', 'Body Condition', 'Health'];
 
@@ -213,7 +212,8 @@ function CalculatorContent() {
       return;
     }
 
-    const sharedFields = {
+    const petData = {
+      user_id: user.id,
       name: formData.petName,
       species: formData.species!,
       breed: formData.breed,
@@ -233,24 +233,21 @@ function CalculatorContent() {
       health_status: formData.healthStatus,
       health_conditions: formData.healthConditions,
       daily_calories: result.mer,
-      calculation_breakdown: result.breakdown as unknown as Json,
+      calculation_breakdown: result.breakdown,
     };
 
     let dbError;
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const db = supabase as any;
-
+    
     if (editPetId) {
-      const { error: updateError } = await db
+      // Update existing pet
+      const { error: updateError } = await supabase
         .from('pets')
-        .update(sharedFields)
+        .update(petData)
         .eq('id', editPetId);
       dbError = updateError;
     } else {
-      const { error: insertError } = await db
-        .from('pets')
-        .insert({ ...sharedFields, user_id: user.id });
+      // Insert new pet
+      const { error: insertError } = await supabase.from('pets').insert(petData);
       dbError = insertError;
     }
 

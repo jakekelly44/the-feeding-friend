@@ -4,7 +4,21 @@ import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, PawPrint, Download, Pencil, Trash2 } from 'lucide-react';
-import type { Pet } from '@/lib/supabase/database.types';
+
+interface Pet {
+  id: string;
+  name: string;
+  species: 'dog' | 'cat';
+  breed: string | null;
+  weight_value: number;
+  weight_unit: 'lb' | 'kg';
+  life_stage: string;
+  activity_category: string | null;
+  bcs: string;
+  daily_calories: number;
+  calculation_breakdown: Record<string, { label: string; value: number }> | null;
+  photo_url: string | null;
+}
 
 export default function PetProfilePage() {
   const router = useRouter();
@@ -15,19 +29,20 @@ export default function PetProfilePage() {
   const [deleting, setDeleting] = useState(false);
   const [mounted, setMounted] = useState(false);
 
+  // Fix hydration - only render after mount
   useEffect(() => {
     setMounted(true);
   }, []);
 
   useEffect(() => {
     if (!mounted) return;
-
+    
     async function fetchPet() {
       const supabase = createClient();
       const { data, error } = await supabase
         .from('pets')
         .select('*')
-        .eq('id', params.id as string)
+        .eq('id', params.id)
         .single();
 
       if (error || !data) {
@@ -43,8 +58,9 @@ export default function PetProfilePage() {
   const handleDownloadPDF = async () => {
     if (!pet) return;
     setDownloading(true);
-
+    
     try {
+      // Dynamic import to avoid SSR issues with jspdf
       const { generateFeedingPlanPDF } = await import('@/lib/pdf-generator');
       generateFeedingPlanPDF({
         petName: pet.name,
@@ -53,7 +69,7 @@ export default function PetProfilePage() {
         weight: pet.weight_value,
         weightUnit: pet.weight_unit,
         dailyCalories: pet.daily_calories,
-        breakdown: pet.calculation_breakdown as Record<string, { label: string; value: number }> | null,
+        breakdown: pet.calculation_breakdown,
       });
     } catch (err) {
       console.error('PDF generation error:', err);
@@ -65,6 +81,8 @@ export default function PetProfilePage() {
 
   const handleEdit = () => {
     if (!pet) return;
+    // Store ALL pet data in sessionStorage for edit mode
+    // Must include all fields to avoid losing data on edit
     const editData = {
       petId: pet.id,
       petName: pet.name,
@@ -72,19 +90,19 @@ export default function PetProfilePage() {
       breed: pet.breed,
       weight: pet.weight_value,
       weightUnit: pet.weight_unit,
-      isNeutered: pet.is_neutered,
-      activityMethod: pet.activity_method || 'categories',
+      isNeutered: (pet as any).is_neutered,
+      activityMethod: (pet as any).activity_method || 'categories',
       activityCategory: pet.activity_category,
-      activityMinutes: pet.activity_minutes,
-      activityPace: pet.activity_pace,
-      dailySteps: pet.daily_steps,
+      activityMinutes: (pet as any).activity_minutes,
+      activityPace: (pet as any).activity_pace,
+      dailySteps: (pet as any).daily_steps,
       lifeStage: pet.life_stage,
-      outdoorExposure: pet.outdoor_exposure,
-      climate: pet.climate,
+      outdoorExposure: (pet as any).outdoor_exposure,
+      climate: (pet as any).climate,
       bcs: pet.bcs,
-      weightGoal: pet.weight_goal || 'maintain',
-      healthStatus: pet.health_status || 'healthy',
-      healthConditions: pet.health_conditions || [],
+      weightGoal: (pet as any).weight_goal || 'maintain',
+      healthStatus: (pet as any).health_status || 'healthy',
+      healthConditions: (pet as any).health_conditions || [],
     };
     sessionStorage.setItem('editPetData', JSON.stringify(editData));
     router.push('/calculator?edit=true');
@@ -95,7 +113,7 @@ export default function PetProfilePage() {
     if (!confirm(`Are you sure you want to delete ${pet.name}'s profile? This cannot be undone.`)) {
       return;
     }
-
+    
     setDeleting(true);
     try {
       const supabase = createClient();
@@ -103,7 +121,7 @@ export default function PetProfilePage() {
         .from('pets')
         .delete()
         .eq('id', pet.id);
-
+      
       if (error) throw error;
       router.push('/home');
     } catch (err) {
@@ -117,6 +135,7 @@ export default function PetProfilePage() {
     router.push('/home');
   };
 
+  // Don't render until mounted (prevents hydration mismatch)
   if (!mounted) {
     return null;
   }
@@ -131,14 +150,15 @@ export default function PetProfilePage() {
 
   if (!pet) return null;
 
-  const breakdown = pet.calculation_breakdown as Record<string, { label: string; value: number }> | null;
-  const multiplier = breakdown
+  const breakdown = pet.calculation_breakdown;
+  const multiplier = breakdown 
     ? Object.values(breakdown).reduce((a, b) => a * (b?.value || 1), 1)
     : 1;
   const rer = breakdown ? Math.round(pet.daily_calories / multiplier) : 0;
 
   return (
     <div className="min-h-screen bg-light-cream pb-8">
+      {/* Header */}
       <div className="px-6 py-4 flex items-center justify-between">
         <button onClick={handleBack} className="p-2 -ml-2">
           <ArrowLeft className="w-6 h-6 text-gray-500" />
@@ -150,6 +170,7 @@ export default function PetProfilePage() {
         </button>
       </div>
 
+      {/* Pet Info */}
       <div className="px-6 text-center mb-6">
         <div className="w-24 h-24 mx-auto rounded-full bg-soft-peach-100 flex items-center justify-center mb-4">
           {pet.photo_url ? (
@@ -162,6 +183,7 @@ export default function PetProfilePage() {
         <p className="text-gray-500 capitalize">{pet.breed?.replace(/-/g, ' ') || pet.species}</p>
       </div>
 
+      {/* Stats Grid */}
       <div className="px-6 space-y-4">
         <div className="bg-white rounded-card p-4 shadow-card">
           <div className="grid grid-cols-2 gap-4">
@@ -184,9 +206,10 @@ export default function PetProfilePage() {
           </div>
         </div>
 
+        {/* Calorie Calculation */}
         <div className="bg-white rounded-card p-4 shadow-card">
           <h3 className="font-semibold text-deep-teal mb-4">Calorie Calculation</h3>
-
+          
           <div className="grid grid-cols-3 gap-2 mb-4">
             <div className="bg-gray-50 rounded-lg p-3 text-center">
               <div className="text-xs text-gray-400">RER</div>
@@ -216,6 +239,7 @@ export default function PetProfilePage() {
           )}
         </div>
 
+        {/* PDF Download */}
         <button
           onClick={handleDownloadPDF}
           disabled={downloading}
@@ -234,6 +258,7 @@ export default function PetProfilePage() {
           )}
         </button>
 
+        {/* Delete Button */}
         <button
           onClick={handleDelete}
           disabled={deleting}

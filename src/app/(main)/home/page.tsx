@@ -1,19 +1,18 @@
 import Link from 'next/link';
 import { Plus, Bell, ChevronRight, PawPrint } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
-import type { Profile, Pet } from '@/lib/supabase/database.types';
 
 export default async function HomePage() {
   const supabase = createClient();
-
+  
   const { data: { user } } = await supabase.auth.getUser();
-  const { data: profile }: { data: Profile | null } = await supabase
+  const { data: profile } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', user!.id)
     .single();
-
-  const { data: pets }: { data: Pet[] | null } = await supabase
+  
+  const { data: pets } = await supabase
     .from('pets')
     .select('*')
     .eq('user_id', user!.id)
@@ -21,6 +20,7 @@ export default async function HomePage() {
 
   return (
     <div className="px-6 py-6">
+      {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-deep-teal-50 rounded-xl flex items-center justify-center">
@@ -40,9 +40,11 @@ export default async function HomePage() {
         </div>
       </div>
 
+      {/* Title */}
       <h1 className="text-2xl font-bold text-charcoal mb-2">My Pets</h1>
       <p className="text-gray-500 mb-6">Select a pet to manage their profile and meals.</p>
 
+      {/* Pet Cards */}
       <div className="space-y-4">
         {pets?.map((pet) => (
           <Link
@@ -66,7 +68,8 @@ export default async function HomePage() {
                 <p className="text-sm text-gray-500 capitalize">{pet.breed?.replace(/-/g, ' ') || pet.species}</p>
               </div>
             </div>
-
+            
+            {/* Stats */}
             <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-50">
               <div className="text-center">
                 <p className="text-xs text-gray-400">Life Stage</p>
@@ -86,6 +89,7 @@ export default async function HomePage() {
           </Link>
         ))}
 
+        {/* Add Pet Button */}
         <Link
           href="/calculator"
           className="flex items-center justify-center gap-2 py-4 border-2 border-dashed border-gray-200 rounded-card text-gray-400 hover:border-deep-teal-200 hover:text-deep-teal transition-colors"
@@ -95,6 +99,7 @@ export default async function HomePage() {
         </Link>
       </div>
 
+      {/* Empty State */}
       {(!pets || pets.length === 0) && (
         <div className="text-center py-12">
           <div className="w-20 h-20 bg-deep-teal-50 rounded-full flex items-center justify-center mx-auto mb-4">
