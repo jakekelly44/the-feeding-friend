@@ -48,7 +48,8 @@ export default async function HomePage() {
 
       {/* Pet Cards */}
       <div className="space-y-4">
-        {pets?.map((pet) => (
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        {pets?.map((pet: any) => (
           <Link
             key={pet.id}
             href={`/pets/${pet.id}`}
