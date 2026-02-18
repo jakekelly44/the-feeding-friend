@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, PawPrint, Download, Pencil, Trash2 } from 'lucide-react';
+import MealConfigurationSection from '@/components/MealConfigurationSection';
 
 interface Pet {
   id: string;
@@ -240,6 +241,9 @@ export default function PetProfilePage() {
             </div>
           )}
         </div>
+
+        {/* Meal Configuration */}
+        <MealConfigurationSection petId={pet.id} dailyCalories={pet.daily_calories} />
 
         {/* PDF Download */}
         <button
