@@ -87,10 +87,13 @@ export default function FoodsPage() {
     return result;
   }, [foods, activeFilter, searchQuery]);
 
-  const handleAddToMeal = (foodId: string) => {
-    // TODO: Implement add to meal flow
-    // For now, navigate to food detail or show modal
-    console.log('Add to meal:', foodId);
+  const handleFoodClick = (foodId: string) => {
+    router.push(`/foods/${foodId}`);
+  };
+
+  const handleAddToMeal = (e: React.MouseEvent, foodId: string) => {
+    e.stopPropagation(); // Prevent card click
+    router.push(`/foods/${foodId}`);
   };
 
   return (
@@ -198,7 +201,8 @@ export default function FoodsPage() {
             return (
               <div
                 key={food.id}
-                className="bg-white rounded-card p-4 shadow-card hover:shadow-card-hover transition-shadow"
+                onClick={() => handleFoodClick(food.id)}
+                className="bg-white rounded-card p-4 shadow-card hover:shadow-card-hover transition-shadow cursor-pointer"
               >
                 <div className="flex items-center gap-3">
                   {/* Food Type Icon */}
@@ -227,7 +231,7 @@ export default function FoodsPage() {
                       <p className="text-xs text-gray-400">kcal/{food.serving_unit}</p>
                     </div>
                     <button
-                      onClick={() => handleAddToMeal(food.id)}
+                      onClick={(e) => handleAddToMeal(e, food.id)}
                       className="w-9 h-9 flex items-center justify-center bg-deep-teal-50 text-deep-teal rounded-full hover:bg-deep-teal-100 transition-colors"
                     >
                       <Plus className="w-5 h-5" />
