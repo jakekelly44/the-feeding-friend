@@ -18,6 +18,7 @@ interface Pet {
   activity_category: string | null;
   bcs: string;
   daily_calories: number;
+  calorie_override: number | null;
   calculation_breakdown: Record<string, { label: string; value: number }> | null;
   photo_url: string | null;
 }
@@ -30,6 +31,8 @@ export default function PetProfilePage() {
   const [downloading, setDownloading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [editingCalories, setEditingCalories] = useState(false);
+  const [calorieOverride, setCalorieOverride] = useState<string>('');
 
   // Fix hydration - only render after mount
   useEffect(() => {
@@ -42,7 +45,7 @@ export default function PetProfilePage() {
     async function fetchPet() {
       const supabase = createClient();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
+      const { data, error} = await (supabase as any)
         .from('pets')
         .select('*')
         .eq('id', params.id)
@@ -84,8 +87,6 @@ export default function PetProfilePage() {
 
   const handleEdit = () => {
     if (!pet) return;
-    // Store ALL pet data in sessionStorage for edit mode
-    // Must include all fields to avoid losing data on edit
     const editData = {
       petId: pet.id,
       petName: pet.name,
@@ -150,7 +151,6 @@ export default function PetProfilePage() {
         .update({ photo_url: url })
         .eq('id', pet.id);
       
-      // Update local state
       setPet({ ...pet, photo_url: url });
     } catch (err) {
       console.error('Error updating pet photo:', err);
@@ -158,7 +158,57 @@ export default function PetProfilePage() {
     }
   };
 
-  // Don't render until mounted (prevents hydration mismatch)
+  const handleCalorieOverride = async () => {
+    if (!pet) return;
+    
+    const override = parseInt(calorieOverride);
+    if (isNaN(override) || override <= 0) {
+      alert('Please enter a valid calorie amount');
+      return;
+    }
+    
+    try {
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('pets')
+        .update({ calorie_override: override })
+        .eq('id', pet.id);
+      
+      setPet({ ...pet, calorie_override: override, daily_calories: override });
+      setEditingCalories(false);
+    } catch (err) {
+      console.error('Error updating calories:', err);
+      alert('Failed to update calorie target');
+    }
+  };
+
+  const handleResetCalories = async () => {
+    if (!pet) return;
+    
+    try {
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('pets')
+        .update({ calorie_override: null })
+        .eq('id', pet.id);
+      
+      const breakdown = pet.calculation_breakdown;
+      const multiplier = breakdown 
+        ? Object.values(breakdown).reduce((a, b) => a * (b?.value || 1), 1)
+        : 1;
+      const rer = breakdown 
+        ? Math.round(pet.daily_calories / multiplier) 
+        : pet.daily_calories;
+      const calculatedCalories = Math.round(rer * multiplier);
+      
+      setPet({ ...pet, calorie_override: null, daily_calories: calculatedCalories });
+    } catch (err) {
+      console.error('Error resetting calories:', err);
+    }
+  };
+
   if (!mounted) {
     return null;
   }
@@ -178,6 +228,7 @@ export default function PetProfilePage() {
     ? Object.values(breakdown).reduce((a, b) => a * (b?.value || 1), 1)
     : 1;
   const rer = breakdown ? Math.round(pet.daily_calories / multiplier) : 0;
+  const calculatedCalories = Math.round(rer * multiplier);
 
   return (
     <div className="min-h-screen bg-light-cream pb-8">
@@ -239,36 +290,99 @@ export default function PetProfilePage() {
           </div>
         </div>
 
-        {/* Calorie Calculation */}
+        {/* Calorie Target with Override */}
         <div className="bg-white rounded-card p-4 shadow-card">
-          <h3 className="font-semibold text-deep-teal mb-4">Calorie Calculation</h3>
-          
-          <div className="grid grid-cols-3 gap-2 mb-4">
-            <div className="bg-gray-50 rounded-lg p-3 text-center">
-              <div className="text-xs text-gray-400">RER</div>
-              <div className="font-bold text-charcoal">{rer}</div>
-            </div>
-            <div className="bg-gray-50 rounded-lg p-3 text-center">
-              <div className="text-xs text-gray-400">Factor</div>
-              <div className="font-bold text-charcoal">{multiplier.toFixed(2)}</div>
-            </div>
-            <div className="bg-green-50 rounded-lg p-3 text-center border border-green-200">
-              <div className="text-xs text-green-600">MER</div>
-              <div className="font-bold text-green-600">{pet.daily_calories}</div>
-            </div>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-deep-teal">Daily Calorie Target</h3>
+            {!editingCalories && (
+              <button
+                onClick={() => {
+                  setCalorieOverride(pet.daily_calories.toString());
+                  setEditingCalories(true);
+                }}
+                className="text-sm text-deep-teal font-medium flex items-center gap-1"
+              >
+                <Pencil className="w-4 h-4" />
+                Edit
+              </button>
+            )}
           </div>
-
-          {breakdown && (
-            <div className="space-y-2 text-sm">
-              {Object.entries(breakdown).map(([key, detail]) => (
-                detail && detail.label ? (
-                  <div key={key} className="flex justify-between py-1 border-b border-gray-50">
-                    <span className="text-gray-600">{detail.label}</span>
-                    <span className="font-mono text-charcoal">{detail.value?.toFixed(2) || '1.00'}</span>
-                  </div>
-                ) : null
-              ))}
+          
+          {editingCalories ? (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">
+                  Calculated: {calculatedCalories} kcal/day
+                </label>
+                <input
+                  type="number"
+                  value={calorieOverride}
+                  onChange={(e) => setCalorieOverride(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-button focus:border-deep-teal focus:ring-1 focus:ring-deep-teal outline-none"
+                  placeholder="Enter custom calorie target"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleCalorieOverride}
+                  className="flex-1 py-2 bg-deep-teal text-white rounded-button font-medium"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={() => setEditingCalories(false)}
+                  className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-button font-medium"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
+          ) : (
+            <>
+              <div className="text-center mb-3">
+                <div className="text-3xl font-bold text-charcoal">{pet.daily_calories}</div>
+                <div className="text-sm text-gray-500">kcal / day</div>
+                {pet.calorie_override && (
+                  <div className="mt-2 flex items-center justify-center gap-2">
+                    <span className="text-xs text-orange-500">✏️ Custom override</span>
+                    <button
+                      onClick={handleResetCalories}
+                      className="text-xs text-deep-teal underline"
+                    >
+                      Reset to calculated
+                    </button>
+                  </div>
+                )}
+              </div>
+              
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                <div className="bg-gray-50 rounded-lg p-3 text-center">
+                  <div className="text-xs text-gray-400">RER</div>
+                  <div className="font-bold text-charcoal">{rer}</div>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-3 text-center">
+                  <div className="text-xs text-gray-400">Factor</div>
+                  <div className="font-bold text-charcoal">{multiplier.toFixed(2)}</div>
+                </div>
+                <div className="bg-green-50 rounded-lg p-3 text-center border border-green-200">
+                  <div className="text-xs text-green-600">MER</div>
+                  <div className="font-bold text-green-600">{calculatedCalories}</div>
+                </div>
+              </div>
+
+              {breakdown && (
+                <div className="space-y-2 text-sm">
+                  {Object.entries(breakdown).map(([key, detail]) => (
+                    detail && detail.label ? (
+                      <div key={key} className="flex justify-between py-1 border-b border-gray-50">
+                        <span className="text-gray-600">{detail.label}</span>
+                        <span className="font-mono text-charcoal">{detail.value?.toFixed(2) || '1.00'}</span>
+                      </div>
+                    ) : null
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
 

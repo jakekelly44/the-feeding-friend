@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Search, Plus, X, ChevronLeft, ChevronRight, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, Plus, X, ChevronLeft, ChevronRight, Trash2, ChevronDown, ChevronUp, Printer } from 'lucide-react';
 import {
   formatPortion,
   parseFraction,
@@ -12,6 +12,7 @@ import {
   redistributeCalories,
   formatWeight,
 } from '@/lib/meal-utils';
+import { calculateDailyCost, calculatePeriodCost, formatCost } from '@/lib/cost-utils';
 
 interface Pet {
   id: string;
@@ -531,26 +532,34 @@ export default function MealsPage() {
   const allMealItems = Object.values(mealItems).flat();
   const totalCalories = allMealItems.reduce((sum, item) => sum + item.calculated_calories, 0);
   
-  // Calculate monthly cost
-  const monthlyCost = allMealItems.reduce((sum, item) => {
-    if (!item.food.package_price || !item.food.package_size) return sum;
+  // Calculate monthly cost using cost-utils
+  const { dailyCostTotal, hasEstimates } = (() => {
+    let total = 0;
+    let hasEstimates = false;
     
-    // Convert package size to serving units
-    let servingsPerPackage = item.food.package_size;
+    allMealItems.forEach(item => {
+      const result = calculateDailyCost(
+        item.portion_quantity,
+        item.portion_unit,
+        item.food.serving_grams,
+        item.food.package_price,
+        item.food.package_size,
+        item.food.package_unit,
+        item.food.item_type
+      );
+      
+      if (result) {
+        total += result.cost;
+        if (result.isEstimate) {
+          hasEstimates = true;
+        }
+      }
+    });
     
-    // If different units, estimate conversion (this is simplified)
-    if (item.food.package_unit === 'lb' && item.food.serving_unit === 'cup') {
-      servingsPerPackage = item.food.package_size * 4; // Rough estimate: 1 lb ≈ 4 cups
-    } else if (item.food.package_unit === 'kg' && item.food.serving_unit === 'g') {
-      servingsPerPackage = item.food.package_size * 1000;
-    }
-    
-    const costPerServing = item.food.package_price / servingsPerPackage;
-    const dailyCost = item.portion_quantity * costPerServing;
-    const monthlyCostForItem = dailyCost * 30;
-    
-    return sum + monthlyCostForItem;
-  }, 0);
+    return { dailyCostTotal: total, hasEstimates };
+  })();
+  
+  const monthlyCost = calculatePeriodCost(dailyCostTotal, 'monthly');
 
   const filteredFoods = availableFoods.filter(food => {
     if (!searchQuery.trim()) return true;
@@ -594,14 +603,45 @@ export default function MealsPage() {
 
   return (
     <>
+      <style jsx global>{`
+        @media print {
+          .no-print {
+            display: none !important;
+          }
+          
+          body {
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+          }
+          
+          .print-food-item {
+            page-break-inside: avoid;
+          }
+          
+          input {
+            border: none !important;
+            pointer-events: none;
+          }
+        }
+      `}</style>
+      
       <div className="min-h-screen bg-light-cream pb-24">
         {/* Header */}
         <div className="sticky top-0 bg-light-cream z-10 px-4 pt-6 pb-4 border-b border-gray-100">
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-xl font-bold text-charcoal">Meal Plan</h1>
-            <div className="text-right">
-              <div className="text-xs text-gray-500 uppercase tracking-wide">Daily Target</div>
-              <div className="text-lg font-bold text-deep-teal">{currentPet?.daily_calories} kcal</div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => window.print()}
+                className="no-print flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-button hover:bg-gray-50 text-sm"
+              >
+                <Printer className="w-4 h-4" />
+                Print
+              </button>
+              <div className="text-right">
+                <div className="text-xs text-gray-500 uppercase tracking-wide">Daily Target</div>
+                <div className="text-lg font-bold text-deep-teal">{currentPet?.daily_calories} kcal</div>
+              </div>
             </div>
           </div>
 
@@ -611,7 +651,7 @@ export default function MealsPage() {
               <button
                 onClick={() => handlePetSwitch('prev')}
                 disabled={currentPetIndex === 0}
-                className="p-2 text-gray-400 hover:text-charcoal disabled:opacity-30"
+                className="no-print p-2 text-gray-400 hover:text-charcoal disabled:opacity-30"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
@@ -623,7 +663,7 @@ export default function MealsPage() {
                   ) : (
                     <span className="text-2xl">🐾</span>
                   )}
-                  <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 border-2 border-white rounded-full" />
+                  <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 border-2 border-white rounded-full no-print" />
                 </div>
                 <p className="font-semibold text-charcoal">{currentPet?.name}</p>
                 <p className="text-xs text-gray-500 capitalize">{currentPet?.breed || currentPet?.species}</p>
@@ -632,7 +672,7 @@ export default function MealsPage() {
               <button
                 onClick={() => handlePetSwitch('next')}
                 disabled={currentPetIndex === pets.length - 1}
-                className="p-2 text-gray-400 hover:text-charcoal disabled:opacity-30"
+                className="no-print p-2 text-gray-400 hover:text-charcoal disabled:opacity-30"
               >
                 <ChevronRight className="w-5 h-5" />
               </button>
@@ -753,7 +793,7 @@ export default function MealsPage() {
                                     type="text"
                                     defaultValue={formatPortion(item.portion_quantity, item.portion_unit)}
                                     onBlur={(e) => handlePortionChange(meal.id, item.id, e.target.value)}
-                                    className="w-24 px-2 py-1 text-xs border border-gray-200 rounded focus:border-deep-teal focus:ring-1 focus:ring-deep-teal focus:outline-none"
+                                    className="w-24 px-2 py-1 text-xs border border-gray-200 rounded focus:border-deep-teal focus:ring-1 focus:ring-deep-teal focus:outline-none print:border-none"
                                   />
                                   {item.portion_grams && (
                                     <span className="text-xs text-gray-400">
@@ -769,7 +809,7 @@ export default function MealsPage() {
                                 </span>
                                 <button
                                   onClick={() => handleDeleteItem(meal.id, item.id)}
-                                  className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                  className="no-print p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </button>
@@ -784,7 +824,7 @@ export default function MealsPage() {
                           setSelectedMealId(meal.id);
                           setShowAddModal(true);
                         }}
-                        className="w-full py-3 border border-dashed border-gray-200 rounded-lg text-gray-400 hover:border-deep-teal-200 hover:text-deep-teal transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+                        className="no-print w-full py-3 border border-dashed border-gray-200 rounded-lg text-gray-400 hover:border-deep-teal-200 hover:text-deep-teal transition-colors flex items-center justify-center gap-2 text-sm font-medium"
                       >
                         <Plus className="w-4 h-4" />
                         {items.length > 0 ? 'Add Another Food' : 'Add Food'}
@@ -798,7 +838,7 @@ export default function MealsPage() {
         </div>
 
         {/* Summary Footer */}
-        <div className="fixed bottom-16 left-0 right-0 bg-white border-t border-gray-100 p-4 shadow-lg">
+        <div className="no-print fixed bottom-16 left-0 right-0 bg-white border-t border-gray-100 p-4 shadow-lg">
           <div className="flex items-center justify-center gap-8">
             <div className="text-center">
               <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Kcal</div>
@@ -813,8 +853,11 @@ export default function MealsPage() {
             <div className="text-center">
               <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Monthly Cost</div>
               <div className="text-xl font-bold text-charcoal">
-                ${monthlyCost.toFixed(2)}
+                {formatCost(monthlyCost)}
               </div>
+              {hasEstimates && (
+                <div className="text-xs text-orange-500 mt-1">~estimated</div>
+              )}
             </div>
           </div>
         </div>

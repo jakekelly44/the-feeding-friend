@@ -33,6 +33,7 @@ const FILTER_OPTIONS: { value: FilterType; label: string }[] = [
   { value: 'wet', label: 'Wet' },
   { value: 'raw', label: 'Raw' },
   { value: 'treat', label: 'Treats' },
+  { value: 'supplement', label: 'Supplements' },
 ];
 
 export default function FoodsPage() {
