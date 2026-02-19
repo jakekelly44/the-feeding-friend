@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, PawPrint, Download, Pencil, Trash2 } from 'lucide-react';
 import MealConfigurationSection from '@/components/MealConfigurationSection';
+import PhotoUpload from '@/components/PhotoUpload';
 
 interface Pet {
   id: string;
@@ -138,6 +139,25 @@ export default function PetProfilePage() {
     router.push('/home');
   };
 
+  const handlePhotoUpload = async (url: string) => {
+    if (!pet) return;
+    
+    try {
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('pets')
+        .update({ photo_url: url })
+        .eq('id', pet.id);
+      
+      // Update local state
+      setPet({ ...pet, photo_url: url });
+    } catch (err) {
+      console.error('Error updating pet photo:', err);
+      alert('Failed to update photo. Please try again.');
+    }
+  };
+
   // Don't render until mounted (prevents hydration mismatch)
   if (!mounted) {
     return null;
@@ -184,6 +204,16 @@ export default function PetProfilePage() {
         </div>
         <h1 className="text-xl font-bold text-charcoal">{pet.name}</h1>
         <p className="text-gray-500 capitalize">{pet.breed?.replace(/-/g, ' ') || pet.species}</p>
+      </div>
+
+      {/* Photo Upload */}
+      <div className="px-6 mb-6">
+        <PhotoUpload
+          currentPhotoUrl={pet.photo_url}
+          onUploadComplete={handlePhotoUpload}
+          bucket="pet-photos"
+          size="large"
+        />
       </div>
 
       {/* Stats Grid */}

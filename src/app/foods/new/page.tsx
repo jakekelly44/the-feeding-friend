@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import PhotoUpload from '@/components/PhotoUpload';
 
 type ItemType = 'dry' | 'wet' | 'raw' | 'treat' | 'supplement';
 type ServingUnit = 'cup' | 'can' | 'oz' | 'g' | 'piece' | 'scoop' | 'pump';
@@ -58,6 +59,7 @@ const initialFormData: FormData = {
 export default function AddFoodPage() {
   const router = useRouter();
   const [formData, setFormData] = useState<FormData>(initialFormData);
+  const [imageUrl, setImageUrl] = useState<string>('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [showCostSection, setShowCostSection] = useState(false);
@@ -122,6 +124,7 @@ export default function AddFoodPage() {
       package_unit: formData.packageSize ? formData.packageUnit : null,
       cost_per_serving: costPerServing,
       cost_per_calorie: costPerCalorie,
+      image_url: imageUrl || null,
       source: 'manual',
     });
 
@@ -210,6 +213,17 @@ export default function AddFoodPage() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            {/* Food Photo */}
+            <div>
+              <label className="block text-sm text-gray-600 mb-1.5">Food Photo (Optional)</label>
+              <PhotoUpload
+                currentPhotoUrl={imageUrl}
+                onUploadComplete={(url) => setImageUrl(url)}
+                bucket="food-photos"
+                size="medium"
+              />
             </div>
           </div>
         </section>

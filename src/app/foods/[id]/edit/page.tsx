@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import PhotoUpload from '@/components/PhotoUpload';
 
 type ItemType = 'dry' | 'wet' | 'raw' | 'treat' | 'supplement';
 type ServingUnit = 'cup' | 'can' | 'oz' | 'g' | 'piece' | 'scoop' | 'pump';
@@ -61,6 +62,7 @@ export default function EditFoodPage() {
   const foodId = params.id as string;
   
   const [formData, setFormData] = useState<FormData>(initialFormData);
+  const [imageUrl, setImageUrl] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -113,6 +115,9 @@ export default function EditFoodPage() {
         packageSize: data.package_size?.toString() || '',
         packageUnit: data.package_unit || 'lb',
       });
+
+      // Set image URL
+      setImageUrl(data.image_url || '');
 
       // Show cost section if data exists
       if (data.package_price || data.package_size) {
@@ -193,6 +198,7 @@ export default function EditFoodPage() {
         package_unit: formData.packageSize ? formData.packageUnit : null,
         cost_per_serving: costPerServing,
         cost_per_calorie: costPerCalorie,
+        image_url: imageUrl || null,
       })
       .eq('id', foodId);
 
@@ -292,6 +298,17 @@ export default function EditFoodPage() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            {/* Food Photo */}
+            <div>
+              <label className="block text-sm text-gray-600 mb-1.5">Food Photo (Optional)</label>
+              <PhotoUpload
+                currentPhotoUrl={imageUrl}
+                onUploadComplete={(url) => setImageUrl(url)}
+                bucket="food-photos"
+                size="medium"
+              />
             </div>
           </div>
         </section>

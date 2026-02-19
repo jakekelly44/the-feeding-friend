@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Check, Smartphone, Clock, BarChart3 } from 'lucide-react';
 import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
+import PhotoUpload from '@/components/PhotoUpload';
 import { getBreedsBySpecies, isLongHaired } from '@/data/breeds';
 import { getConditionsBySpecies } from '@/data/health-conditions';
 import { calculateMER, convertWeight } from '@/lib/calculations/calculator';
@@ -22,6 +23,7 @@ interface FormData {
   weight: number | null;
   weightUnit: 'lb' | 'kg';
   isNeutered: boolean | null;
+  photo_url: string;
   activityMethod: ActivityMethod;
   dailySteps: number | null;
   activityMinutes: number | null;
@@ -43,6 +45,7 @@ const initialFormData: FormData = {
   weight: null,
   weightUnit: 'lb',
   isNeutered: null,
+  photo_url: '',
   activityMethod: 'categories',
   dailySteps: null,
   activityMinutes: null,
@@ -220,6 +223,7 @@ function CalculatorContent() {
       weight_value: formData.weight!,
       weight_unit: formData.weightUnit,
       is_neutered: formData.isNeutered!,
+      photo_url: formData.photo_url || null,
       activity_method: formData.activityMethod,
       activity_category: formData.activityCategory,
       activity_minutes: formData.activityMinutes,
@@ -354,6 +358,17 @@ function Section1Baseline({ formData, updateField, breeds, weightInKg }: any) {
           onChange={(e) => updateField('petName', e.target.value)}
           placeholder="e.g., Max, Luna, Bella"
           className="w-full px-4 py-3 rounded-card border border-gray-200 focus:border-deep-teal focus:ring-1 focus:ring-deep-teal outline-none"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-charcoal mb-1">Add a photo of your pet (optional)</label>
+        <p className="text-sm text-gray-500 mb-3">Upload a photo to personalize your pet's profile</p>
+        <PhotoUpload
+          currentPhotoUrl={formData.photo_url}
+          onUploadComplete={(url) => updateField('photo_url', url)}
+          bucket="pet-photos"
+          size="large"
         />
       </div>
 
