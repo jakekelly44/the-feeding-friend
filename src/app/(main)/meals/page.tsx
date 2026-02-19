@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Search, Plus, X, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { Search, Plus, X, ChevronLeft, ChevronRight, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import {
   formatPortion,
   parseFraction,
@@ -41,6 +41,9 @@ interface FoodItem {
   protein_percent: number | null;
   fat_percent: number | null;
   image_url: string | null;
+  package_price: number | null;
+  package_size: number | null;
+  package_unit: string | null;
 }
 
 interface MealFoodItem {
@@ -52,7 +55,6 @@ interface MealFoodItem {
   portion_grams: number | null;
   calculated_calories: number;
   manually_adjusted: boolean;
-  // Joined from items table
   food: FoodItem;
 }
 
@@ -67,28 +69,23 @@ const FOOD_TYPE_STYLES: Record<string, { bg: string; emoji: string }> = {
 export default function MealsPage() {
   const router = useRouter();
   
-  // Pets
   const [pets, setPets] = useState<Pet[]>([]);
   const [currentPetIndex, setCurrentPetIndex] = useState(0);
   const [loadingPets, setLoadingPets] = useState(true);
 
-  // Meals
   const [meals, setMeals] = useState<Meal[]>([]);
-  const [activeMealIndex, setActiveMealIndex] = useState(0);
   const [loadingMeals, setLoadingMeals] = useState(true);
+  
+  const [mealItems, setMealItems] = useState<Record<string, MealFoodItem[]>>({});
+  const [expandedMeals, setExpandedMeals] = useState<Set<string>>(new Set());
 
-  // Meal Items
-  const [mealItems, setMealItems] = useState<MealFoodItem[]>([]);
-  const [loadingItems, setLoadingItems] = useState(false);
-
-  // Add Food Modal
   const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedMealId, setSelectedMealId] = useState<string | null>(null);
   const [availableFoods, setAvailableFoods] = useState<FoodItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [addingFood, setAddingFood] = useState(false);
 
   const currentPet = pets[currentPetIndex];
-  const currentMeal = meals[activeMealIndex];
 
   // Fetch user's pets
   useEffect(() => {
@@ -125,7 +122,6 @@ export default function MealsPage() {
       setLoadingMeals(true);
       const supabase = createClient();
 
-      // Get meal plan
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: mealPlan } = await (supabase as any)
         .from('meal_plans')
@@ -140,7 +136,6 @@ export default function MealsPage() {
         return;
       }
 
-      // Get meals
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: mealsData } = await (supabase as any)
         .from('meals')
@@ -150,6 +145,10 @@ export default function MealsPage() {
 
       if (mealsData) {
         setMeals(mealsData);
+        // Expand first meal by default
+        if (mealsData.length > 0) {
+          setExpandedMeals(new Set([mealsData[0].id]));
+        }
       }
       setLoadingMeals(false);
     }
@@ -157,43 +156,48 @@ export default function MealsPage() {
     fetchMeals();
   }, [currentPet]);
 
-  // Fetch meal items for current meal
+  // Fetch items for all meals
   useEffect(() => {
-    if (!currentMeal) return;
+    if (meals.length === 0) return;
 
-    async function fetchMealItems() {
-      setLoadingItems(true);
+    async function fetchAllMealItems() {
       const supabase = createClient();
+      const itemsMap: Record<string, MealFoodItem[]> = {};
 
-      // Get meal items with food details
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
-        .from('meal_items')
-        .select(`
-          *,
-          food:items (
-            id,
-            brand,
-            name,
-            item_type,
-            calories_per_unit,
-            serving_unit,
-            serving_grams,
-            protein_percent,
-            fat_percent,
-            image_url
-          )
-        `)
-        .eq('meal_id', currentMeal.id);
+      for (const meal of meals) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data, error } = await (supabase as any)
+          .from('meal_items')
+          .select(`
+            *,
+            food:items (
+              id,
+              brand,
+              name,
+              item_type,
+              calories_per_unit,
+              serving_unit,
+              serving_grams,
+              protein_percent,
+              fat_percent,
+              image_url,
+              package_price,
+              package_size,
+              package_unit
+            )
+          `)
+          .eq('meal_id', meal.id);
 
-      if (!error && data) {
-        setMealItems(data);
+        if (!error && data) {
+          itemsMap[meal.id] = data;
+        }
       }
-      setLoadingItems(false);
+
+      setMealItems(itemsMap);
     }
 
-    fetchMealItems();
-  }, [currentMeal]);
+    fetchAllMealItems();
+  }, [meals]);
 
   // Fetch available foods when modal opens
   useEffect(() => {
@@ -205,7 +209,7 @@ export default function MealsPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data } = await (supabase as any)
         .from('items')
-        .select('id, brand, name, item_type, calories_per_unit, serving_unit, serving_grams, protein_percent, fat_percent, image_url')
+        .select('*')
         .order('use_count', { ascending: false })
         .limit(100);
 
@@ -220,46 +224,54 @@ export default function MealsPage() {
   const handlePetSwitch = (direction: 'prev' | 'next') => {
     if (direction === 'prev' && currentPetIndex > 0) {
       setCurrentPetIndex(currentPetIndex - 1);
-      setActiveMealIndex(0);
     } else if (direction === 'next' && currentPetIndex < pets.length - 1) {
       setCurrentPetIndex(currentPetIndex + 1);
-      setActiveMealIndex(0);
     }
   };
 
+  const toggleMeal = (mealId: string) => {
+    const newExpanded = new Set(expandedMeals);
+    if (newExpanded.has(mealId)) {
+      newExpanded.delete(mealId);
+    } else {
+      newExpanded.add(mealId);
+    }
+    setExpandedMeals(newExpanded);
+  };
+
   const handleAddFood = async (food: FoodItem) => {
-    if (!currentMeal || addingFood) return;
+    if (!selectedMealId || addingFood) return;
+
+    const meal = meals.find(m => m.id === selectedMealId);
+    if (!meal) return;
 
     setAddingFood(true);
 
     try {
       const supabase = createClient();
+      const items = mealItems[selectedMealId] || [];
 
-      // Calculate target calories for this new item
-      const existingCalories = mealItems.reduce((sum, item) => {
+      const existingCalories = items.reduce((sum, item) => {
         return sum + (item.manually_adjusted ? item.calculated_calories : 0);
       }, 0);
 
-      const remainingCalories = currentMeal.target_calories - existingCalories;
-      const autoItemCount = mealItems.filter(item => !item.manually_adjusted).length + 1;
+      const remainingCalories = meal.target_calories - existingCalories;
+      const autoItemCount = items.filter(item => !item.manually_adjusted).length + 1;
       const targetCalories = remainingCalories / autoItemCount;
 
-      // Calculate portion
       const portion = calculatePortion(targetCalories, food.calories_per_unit);
       const calculatedCalories = calculateCalories(portion, food.calories_per_unit);
 
-      // Calculate grams if available
       let portionGrams = null;
       if (food.serving_grams) {
         portionGrams = Math.round(food.serving_grams * portion);
       }
 
-      // Insert meal item
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error } = await (supabase as any)
         .from('meal_items')
         .insert({
-          meal_id: currentMeal.id,
+          meal_id: selectedMealId,
           item_id: food.id,
           portion_quantity: portion,
           portion_unit: food.serving_unit,
@@ -285,15 +297,17 @@ export default function MealsPage() {
             serving_grams,
             protein_percent,
             fat_percent,
-            image_url
+            image_url,
+            package_price,
+            package_size,
+            package_unit
           )
         `)
-        .eq('meal_id', currentMeal.id);
+        .eq('meal_id', selectedMealId);
 
       if (newItems) {
-        // Redistribute calories among all items
         const redistributed = redistributeCalories(
-          currentMeal.target_calories,
+          meal.target_calories,
           newItems.map((item: any) => ({
             id: item.id,
             portion_quantity: item.portion_quantity,
@@ -303,7 +317,6 @@ export default function MealsPage() {
           }))
         );
 
-        // Update all auto items with new portions
         for (const item of redistributed.filter(r => !r.manually_adjusted)) {
           const dbItem = newItems.find((ni: any) => ni.id === item.id);
           if (dbItem && Math.abs(dbItem.portion_quantity - item.portion_quantity) > 0.01) {
@@ -317,7 +330,7 @@ export default function MealsPage() {
           }
         }
 
-        // Fetch updated items
+        // Refresh all items for this meal
         const { data: finalItems } = await (supabase as any)
           .from('meal_items')
           .select(`
@@ -332,18 +345,25 @@ export default function MealsPage() {
               serving_grams,
               protein_percent,
               fat_percent,
-              image_url
+              image_url,
+              package_price,
+              package_size,
+              package_unit
             )
           `)
-          .eq('meal_id', currentMeal.id);
+          .eq('meal_id', selectedMealId);
 
         if (finalItems) {
-          setMealItems(finalItems);
+          setMealItems(prev => ({
+            ...prev,
+            [selectedMealId]: finalItems,
+          }));
         }
       }
 
       setShowAddModal(false);
       setSearchQuery('');
+      setSelectedMealId(null);
     } catch (err) {
       console.error('Error adding food:', err);
       alert('Failed to add food. Please try again.');
@@ -352,13 +372,13 @@ export default function MealsPage() {
     }
   };
 
-  const handleDeleteItem = async (itemId: string) => {
-    if (!currentMeal) return;
+  const handleDeleteItem = async (mealId: string, itemId: string) => {
+    const meal = meals.find(m => m.id === mealId);
+    if (!meal) return;
 
     try {
       const supabase = createClient();
 
-      // Delete item
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error } = await (supabase as any)
         .from('meal_items')
@@ -367,7 +387,6 @@ export default function MealsPage() {
 
       if (error) throw error;
 
-      // Refresh and redistribute
       const { data: remainingItems } = await (supabase as any)
         .from('meal_items')
         .select(`
@@ -382,15 +401,17 @@ export default function MealsPage() {
             serving_grams,
             protein_percent,
             fat_percent,
-            image_url
+            image_url,
+            package_price,
+            package_size,
+            package_unit
           )
         `)
-        .eq('meal_id', currentMeal.id);
+        .eq('meal_id', mealId);
 
       if (remainingItems && remainingItems.length > 0) {
-        // Redistribute calories
         const redistributed = redistributeCalories(
-          currentMeal.target_calories,
+          meal.target_calories,
           remainingItems.map((item: any) => ({
             id: item.id,
             portion_quantity: item.portion_quantity,
@@ -400,7 +421,6 @@ export default function MealsPage() {
           }))
         );
 
-        // Update portions
         for (const item of redistributed.filter(r => !r.manually_adjusted)) {
           const dbItem = remainingItems.find((ri: any) => ri.id === item.id);
           if (dbItem && Math.abs(dbItem.portion_quantity - item.portion_quantity) > 0.01) {
@@ -415,7 +435,6 @@ export default function MealsPage() {
         }
       }
 
-      // Refresh items
       const { data: finalItems } = await (supabase as any)
         .from('meal_items')
         .select(`
@@ -430,24 +449,27 @@ export default function MealsPage() {
             serving_grams,
             protein_percent,
             fat_percent,
-            image_url
+            image_url,
+            package_price,
+            package_size,
+            package_unit
           )
         `)
-        .eq('meal_id', currentMeal.id);
+        .eq('meal_id', mealId);
 
-      if (finalItems) {
-        setMealItems(finalItems);
-      } else {
-        setMealItems([]);
-      }
+      setMealItems(prev => ({
+        ...prev,
+        [mealId]: finalItems || [],
+      }));
     } catch (err) {
       console.error('Error deleting item:', err);
       alert('Failed to delete item. Please try again.');
     }
   };
 
-  const handlePortionChange = async (itemId: string, newPortionStr: string) => {
-    const item = mealItems.find(i => i.id === itemId);
+  const handlePortionChange = async (mealId: string, itemId: string, newPortionStr: string) => {
+    const items = mealItems[mealId] || [];
+    const item = items.find(i => i.id === itemId);
     if (!item) return;
 
     const newPortion = parseFraction(newPortionStr);
@@ -458,7 +480,6 @@ export default function MealsPage() {
     try {
       const supabase = createClient();
 
-      // Update with manually_adjusted flag
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any)
         .from('meal_items')
@@ -469,7 +490,6 @@ export default function MealsPage() {
         })
         .eq('id', itemId);
 
-      // Refresh items
       const { data: updatedItems } = await (supabase as any)
         .from('meal_items')
         .select(`
@@ -484,20 +504,54 @@ export default function MealsPage() {
             serving_grams,
             protein_percent,
             fat_percent,
-            image_url
+            image_url,
+            package_price,
+            package_size,
+            package_unit
           )
         `)
-        .eq('meal_id', currentMeal.id);
+        .eq('meal_id', mealId);
 
       if (updatedItems) {
-        setMealItems(updatedItems);
+        setMealItems(prev => ({
+          ...prev,
+          [mealId]: updatedItems,
+        }));
       }
     } catch (err) {
       console.error('Error updating portion:', err);
     }
   };
 
-  // Filter foods for search
+  const handleFoodClick = (foodId: string) => {
+    router.push(`/foods/${foodId}`);
+  };
+
+  // Calculate totals across all meals
+  const allMealItems = Object.values(mealItems).flat();
+  const totalCalories = allMealItems.reduce((sum, item) => sum + item.calculated_calories, 0);
+  
+  // Calculate monthly cost
+  const monthlyCost = allMealItems.reduce((sum, item) => {
+    if (!item.food.package_price || !item.food.package_size) return sum;
+    
+    // Convert package size to serving units
+    let servingsPerPackage = item.food.package_size;
+    
+    // If different units, estimate conversion (this is simplified)
+    if (item.food.package_unit === 'lb' && item.food.serving_unit === 'cup') {
+      servingsPerPackage = item.food.package_size * 4; // Rough estimate: 1 lb ≈ 4 cups
+    } else if (item.food.package_unit === 'kg' && item.food.serving_unit === 'g') {
+      servingsPerPackage = item.food.package_size * 1000;
+    }
+    
+    const costPerServing = item.food.package_price / servingsPerPackage;
+    const dailyCost = item.portion_quantity * costPerServing;
+    const monthlyCostForItem = dailyCost * 30;
+    
+    return sum + monthlyCostForItem;
+  }, 0);
+
   const filteredFoods = availableFoods.filter(food => {
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
@@ -506,26 +560,6 @@ export default function MealsPage() {
       food.name.toLowerCase().includes(query)
     );
   });
-
-  // Calculate totals
-  const totalCalories = mealItems.reduce((sum, item) => sum + item.calculated_calories, 0);
-  const totalFat = mealItems.reduce((sum, item) => {
-    if (!item.food.fat_percent) return sum;
-    const portionGrams = item.portion_grams || (item.portion_quantity * 100);
-    return sum + (portionGrams * item.food.fat_percent / 100);
-  }, 0);
-  const totalProtein = mealItems.reduce((sum, item) => {
-    if (!item.food.protein_percent) return sum;
-    const portionGrams = item.portion_grams || (item.portion_quantity * 100);
-    return sum + (portionGrams * item.food.protein_percent / 100);
-  }, 0);
-
-  const monthlyCost = 0; // TODO: Implement
-
-  const calorieStatus = 
-    totalCalories > (currentMeal?.target_calories || 0) * 1.1 ? 'over' :
-    totalCalories < (currentMeal?.target_calories || 0) * 0.9 ? 'under' : 
-    'good';
 
   if (loadingPets) {
     return (
@@ -562,12 +596,13 @@ export default function MealsPage() {
     <>
       <div className="min-h-screen bg-light-cream pb-24">
         {/* Header */}
-        <div className="sticky top-0 bg-light-cream z-10 px-4 pt-6 pb-4">
+        <div className="sticky top-0 bg-light-cream z-10 px-4 pt-6 pb-4 border-b border-gray-100">
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-xl font-bold text-charcoal">Meal Plan</h1>
-            <span className="text-sm text-deep-teal font-semibold">
-              {currentPet?.daily_calories} kcal/day
-            </span>
+            <div className="text-right">
+              <div className="text-xs text-gray-500 uppercase tracking-wide">Daily Target</div>
+              <div className="text-lg font-bold text-deep-teal">{currentPet?.daily_calories} kcal</div>
+            </div>
           </div>
 
           {/* Pet Carousel */}
@@ -582,12 +617,13 @@ export default function MealsPage() {
               </button>
               
               <div className="text-center">
-                <div className="w-16 h-16 mx-auto rounded-full bg-soft-peach-100 flex items-center justify-center mb-2">
+                <div className="w-16 h-16 mx-auto rounded-full bg-soft-peach-100 flex items-center justify-center mb-2 relative">
                   {currentPet?.photo_url ? (
                     <img src={currentPet.photo_url} alt={currentPet.name} className="w-full h-full rounded-full object-cover" />
                   ) : (
                     <span className="text-2xl">🐾</span>
                   )}
+                  <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 border-2 border-white rounded-full" />
                 </div>
                 <p className="font-semibold text-charcoal">{currentPet?.name}</p>
                 <p className="text-xs text-gray-500 capitalize">{currentPet?.breed || currentPet?.species}</p>
@@ -603,168 +639,200 @@ export default function MealsPage() {
             </div>
           )}
 
-          {/* Meal Tabs */}
-          {loadingMeals ? (
-            <div className="h-12 bg-gray-100 rounded-button animate-pulse" />
-          ) : (
-            <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4">
-              {meals.map((meal, index) => (
-                <button
-                  key={meal.id}
-                  onClick={() => setActiveMealIndex(index)}
-                  className={`px-4 py-2.5 rounded-button font-medium whitespace-nowrap transition-colors flex-shrink-0 ${
-                    activeMealIndex === index
-                      ? 'bg-deep-teal text-white'
-                      : 'bg-white text-gray-600 border border-gray-200 hover:border-deep-teal-200'
-                  }`}
-                >
-                  <div className="text-sm">{meal.name}</div>
-                  <div className="text-xs opacity-75">{meal.target_percent.toFixed(0)}%</div>
-                </button>
-              ))}
+          {/* Overall Progress Bar */}
+          <div className="mt-4">
+            <div className="flex items-center justify-between text-xs mb-1">
+              <span className="text-gray-500">{totalCalories} kcal</span>
+              <span className="text-gray-500">{currentPet && Math.round((totalCalories / currentPet.daily_calories) * 100)}%</span>
             </div>
-          )}
+            <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className={`h-full transition-all duration-300 ${
+                  totalCalories > (currentPet?.daily_calories || 0) ? 'bg-red-500' :
+                  totalCalories >= (currentPet?.daily_calories || 0) * 0.9 ? 'bg-green-500' :
+                  'bg-deep-teal'
+                }`}
+                style={{ width: `${Math.min(100, (totalCalories / (currentPet?.daily_calories || 1)) * 100)}%` }}
+              />
+            </div>
+          </div>
         </div>
 
-        {/* Meal Items */}
-        <div className="px-4 space-y-3 mb-6">
-          {loadingItems ? (
-            <div className="space-y-3">
+        {/* Meal Sections */}
+        <div className="px-4 py-4 space-y-4">
+          {loadingMeals ? (
+            <div className="space-y-4">
               {[1, 2, 3].map(i => (
                 <div key={i} className="bg-white rounded-card p-4 animate-pulse">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-gray-200 rounded-xl" />
-                    <div className="flex-1">
-                      <div className="h-4 bg-gray-200 rounded w-2/3 mb-2" />
-                      <div className="h-3 bg-gray-100 rounded w-1/2" />
-                    </div>
-                  </div>
+                  <div className="h-6 bg-gray-200 rounded w-1/3 mb-3" />
+                  <div className="h-2 bg-gray-200 rounded mb-3" />
+                  <div className="h-16 bg-gray-100 rounded" />
                 </div>
               ))}
             </div>
-          ) : mealItems.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <span className="text-3xl">🍽️</span>
-              </div>
-              <p className="text-gray-500 text-sm italic mb-6">No food added yet</p>
-            </div>
           ) : (
-            mealItems.map((item) => {
-              const style = FOOD_TYPE_STYLES[item.food.item_type] || FOOD_TYPE_STYLES.dry;
-              return (
-                <div key={item.id} className="bg-white rounded-card p-4 shadow-card">
-                  <div className="flex items-start gap-3">
-                    {/* Food Icon */}
-                    <div className={`w-12 h-12 ${style.bg} rounded-xl flex items-center justify-center text-xl flex-shrink-0`}>
-                      {item.food.image_url ? (
-                        <img 
-                          src={item.food.image_url} 
-                          alt={item.food.name}
-                          className="w-full h-full object-cover rounded-xl"
-                        />
-                      ) : (
-                        style.emoji
-                      )}
-                    </div>
+            meals.map((meal) => {
+              const items = mealItems[meal.id] || [];
+              const mealTotal = items.reduce((sum, item) => sum + item.calculated_calories, 0);
+              const isExpanded = expandedMeals.has(meal.id);
+              const progress = (mealTotal / meal.target_calories) * 100;
 
-                    {/* Food Info */}
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-charcoal text-sm truncate">{item.food.name}</h3>
-                      <p className="text-xs text-gray-500 truncate mb-2">{item.food.brand}</p>
-                      
-                      {/* Portion Input */}
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          defaultValue={formatPortion(item.portion_quantity, item.portion_unit)}
-                          onBlur={(e) => handlePortionChange(item.id, e.target.value)}
-                          className="w-24 px-2 py-1 text-sm border border-gray-200 rounded focus:border-deep-teal focus:ring-1 focus:ring-deep-teal focus:outline-none"
-                        />
-                        {item.portion_grams && (
-                          <span className="text-xs text-gray-400">
-                            {formatWeight(item.portion_grams, item.portion_unit)}
-                          </span>
-                        )}
+              return (
+                <div key={meal.id} className="bg-white rounded-card shadow-card overflow-hidden">
+                  {/* Meal Header */}
+                  <button
+                    onClick={() => toggleMeal(meal.id)}
+                    className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex-1 text-left">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-bold text-charcoal">{meal.name}</h3>
+                        <span className="text-xs text-gray-500">{meal.target_percent.toFixed(0)}%</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-semibold text-deep-teal">
+                          {mealTotal} / {meal.target_calories} kcal
+                        </span>
                       </div>
                     </div>
+                    {isExpanded ? (
+                      <ChevronUp className="w-5 h-5 text-gray-400" />
+                    ) : (
+                      <ChevronDown className="w-5 h-5 text-gray-400" />
+                    )}
+                  </button>
 
-                    {/* Calories & Delete */}
-                    <div className="flex flex-col items-end gap-2">
-                      <span className="font-bold text-deep-teal text-sm">
-                        {item.calculated_calories}
-                        <span className="text-xs font-normal text-gray-400 ml-1">kcal</span>
-                      </span>
-                      <button
-                        onClick={() => handleDeleteItem(item.id)}
-                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                  {/* Progress Bar */}
+                  <div className="px-4 pb-3">
+                    <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full transition-all duration-300 ${
+                          progress > 110 ? 'bg-red-500' :
+                          progress >= 90 ? 'bg-green-500' :
+                          'bg-deep-teal'
+                        }`}
+                        style={{ width: `${Math.min(100, progress)}%` }}
+                      />
                     </div>
                   </div>
+
+                  {/* Expanded Content */}
+                  {isExpanded && (
+                    <div className="border-t border-gray-100 p-4 space-y-3">
+                      {items.length === 0 ? (
+                        <p className="text-center text-gray-400 text-sm italic py-6">No food added yet</p>
+                      ) : (
+                        items.map((item) => {
+                          const style = FOOD_TYPE_STYLES[item.food.item_type] || FOOD_TYPE_STYLES.dry;
+                          return (
+                            <div
+                              key={item.id}
+                              onClick={() => handleFoodClick(item.food.id)}
+                              className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer group"
+                            >
+                              <div className={`w-12 h-12 ${style.bg} rounded-xl flex items-center justify-center text-xl flex-shrink-0`}>
+                                {item.food.image_url ? (
+                                  <img 
+                                    src={item.food.image_url} 
+                                    alt={item.food.name}
+                                    className="w-full h-full object-cover rounded-xl"
+                                  />
+                                ) : (
+                                  style.emoji
+                                )}
+                              </div>
+
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-semibold text-charcoal text-sm truncate group-hover:text-deep-teal transition-colors">
+                                  {item.food.name}
+                                </h4>
+                                <p className="text-xs text-gray-500 truncate mb-2">{item.food.brand}</p>
+                                
+                                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                  <input
+                                    type="text"
+                                    defaultValue={formatPortion(item.portion_quantity, item.portion_unit)}
+                                    onBlur={(e) => handlePortionChange(meal.id, item.id, e.target.value)}
+                                    className="w-24 px-2 py-1 text-xs border border-gray-200 rounded focus:border-deep-teal focus:ring-1 focus:ring-deep-teal focus:outline-none"
+                                  />
+                                  {item.portion_grams && (
+                                    <span className="text-xs text-gray-400">
+                                      {formatWeight(item.portion_grams, item.portion_unit)}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex flex-col items-end gap-2" onClick={(e) => e.stopPropagation()}>
+                                <span className="font-bold text-deep-teal text-sm whitespace-nowrap">
+                                  {item.calculated_calories} kcal
+                                </span>
+                                <button
+                                  onClick={() => handleDeleteItem(meal.id, item.id)}
+                                  className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+
+                      <button
+                        onClick={() => {
+                          setSelectedMealId(meal.id);
+                          setShowAddModal(true);
+                        }}
+                        className="w-full py-3 border border-dashed border-gray-200 rounded-lg text-gray-400 hover:border-deep-teal-200 hover:text-deep-teal transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+                      >
+                        <Plus className="w-4 h-4" />
+                        {items.length > 0 ? 'Add Another Food' : 'Add Food'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })
           )}
-
-          {/* Add Food Button */}
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="w-full py-4 border-2 border-dashed border-gray-200 rounded-card text-gray-400 hover:border-deep-teal-200 hover:text-deep-teal transition-colors flex items-center justify-center gap-2"
-          >
-            <Plus className="w-5 h-5" />
-            <span className="font-medium">Add Food</span>
-          </button>
         </div>
 
         {/* Summary Footer */}
         <div className="fixed bottom-16 left-0 right-0 bg-white border-t border-gray-100 p-4 shadow-lg">
-          <div className="grid grid-cols-4 gap-2 text-center mb-2">
-            <div>
-              <div className="text-xs text-gray-500">Total Kcal</div>
-              <div className={`font-bold ${
-                calorieStatus === 'over' ? 'text-red-500' :
-                calorieStatus === 'under' ? 'text-orange-500' :
+          <div className="flex items-center justify-center gap-8">
+            <div className="text-center">
+              <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Kcal</div>
+              <div className={`text-xl font-bold ${
+                totalCalories > (currentPet?.daily_calories || 0) * 1.1 ? 'text-red-500' :
+                totalCalories < (currentPet?.daily_calories || 0) * 0.9 ? 'text-orange-500' :
                 'text-green-600'
               }`}>
                 {totalCalories}
               </div>
             </div>
-            <div>
-              <div className="text-xs text-gray-500">Fat</div>
-              <div className="font-bold text-charcoal">{totalFat.toFixed(0)}g</div>
-            </div>
-            <div>
-              <div className="text-xs text-gray-500">Protein</div>
-              <div className="font-bold text-charcoal">{totalProtein.toFixed(0)}g</div>
-            </div>
-            <div>
-              <div className="text-xs text-gray-500">Monthly</div>
-              <div className="font-bold text-charcoal">${monthlyCost.toFixed(2)}</div>
+            <div className="text-center">
+              <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Monthly Cost</div>
+              <div className="text-xl font-bold text-charcoal">
+                ${monthlyCost.toFixed(2)}
+              </div>
             </div>
           </div>
-          {currentMeal && (
-            <div className="text-xs text-center text-gray-500">
-              Target: {currentMeal.target_calories} kcal
-            </div>
-          )}
         </div>
       </div>
 
       {/* Add Food Modal */}
-      {showAddModal && (
+      {showAddModal && selectedMealId && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center sm:justify-center">
           <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg sm:max-h-[80vh] flex flex-col">
-            {/* Modal Header */}
             <div className="flex items-center justify-between p-4 border-b border-gray-100">
               <h2 className="text-lg font-bold text-charcoal">
-                Add Food to {currentMeal?.name}
+                Add Food to {meals.find(m => m.id === selectedMealId)?.name}
               </h2>
               <button
                 onClick={() => {
                   setShowAddModal(false);
                   setSearchQuery('');
+                  setSelectedMealId(null);
                 }}
                 className="p-2 text-gray-400 hover:text-charcoal"
               >
@@ -772,7 +840,6 @@ export default function MealsPage() {
               </button>
             </div>
 
-            {/* Search */}
             <div className="p-4 border-b border-gray-100">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -787,7 +854,6 @@ export default function MealsPage() {
               </div>
             </div>
 
-            {/* Food List */}
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
               {filteredFoods.length === 0 ? (
                 <div className="text-center py-12">
