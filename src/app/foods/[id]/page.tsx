@@ -273,7 +273,7 @@ export default function FoodDetailPage() {
       <div className="sticky top-0 bg-light-cream z-10 px-4 pt-6 pb-4 border-b border-gray-100">
         <div className="flex items-center justify-between">
           <button
-            onClick={() => router.back()}
+            onClick={() => router.push('/foods')}
             className="flex items-center gap-2 text-gray-600 hover:text-charcoal"
           >
             <ArrowLeft className="w-5 h-5" />

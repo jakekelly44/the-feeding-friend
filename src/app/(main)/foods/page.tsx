@@ -40,8 +40,12 @@ export default function FoodsPage() {
   const router = useRouter();
   const [foods, setFoods] = useState<FoodItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const ITEMS_PER_PAGE = 25;
 
   useEffect(() => {
     async function fetchFoods() {
@@ -53,18 +57,43 @@ export default function FoodsPage() {
         .select('id, brand, name, item_type, calories_per_unit, serving_unit, image_url')
         .order('use_count', { ascending: false })
         .order('brand', { ascending: true })
-        .limit(100);
+        .range(0, ITEMS_PER_PAGE - 1);
 
       if (error) {
         console.error('Error fetching foods:', error);
       } else {
         setFoods(data || []);
+        setHasMore(data && data.length === ITEMS_PER_PAGE);
       }
       setLoading(false);
     }
 
     fetchFoods();
   }, []);
+
+  const loadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    
+    setLoadingMore(true);
+    const supabase = createClient();
+    const start = page * ITEMS_PER_PAGE;
+    const end = start + ITEMS_PER_PAGE - 1;
+    
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any)
+      .from('items')
+      .select('id, brand, name, item_type, calories_per_unit, serving_unit, image_url')
+      .order('use_count', { ascending: false })
+      .order('brand', { ascending: true })
+      .range(start, end);
+
+    if (!error && data) {
+      setFoods(prev => [...prev, ...data]);
+      setHasMore(data.length === ITEMS_PER_PAGE);
+      setPage(prev => prev + 1);
+    }
+    setLoadingMore(false);
+  };
 
   // Filter and search
   const filteredFoods = useMemo(() => {
@@ -242,6 +271,19 @@ export default function FoodsPage() {
               </div>
             );
           })
+        )}
+
+        {/* Load More Button */}
+        {!loading && hasMore && filteredFoods.length > 0 && (
+          <div className="flex justify-center py-6">
+            <button
+              onClick={loadMore}
+              disabled={loadingMore}
+              className="px-6 py-3 bg-deep-teal text-white rounded-button font-semibold hover:bg-deep-teal-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {loadingMore ? 'Loading...' : 'Load More'}
+            </button>
+          </div>
         )}
       </div>
     </div>

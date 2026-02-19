@@ -42,10 +42,10 @@ interface MealFoodItem {
 type Period = 'daily' | 'weekly' | 'monthly';
 
 const FOOD_TYPE_COLORS: Record<string, string> = {
-  dry: '#F59E0B',      // Amber
-  wet: '#EF4444',      // Red  
-  raw: '#F97316',      // Orange
-  treat: '#EAB308',    // Yellow
+  dry: '#F59E0B',      // Amber/Orange
+  wet: '#8B5CF6',      // Purple
+  raw: '#EF4444',      // Red
+  treat: '#10B981',    // Green
   supplement: '#3B82F6', // Blue
 };
 
