@@ -10,8 +10,8 @@ interface PetData {
   weightUnit: 'lb' | 'kg';
   dailyCalories: number;
   breakdown: Record<string, { label: string; value: number }> | null;
-  priority: 'weight_control' | 'digestive_health' | 'ingredient_quality' | 'budget'; // ADD THIS
-  recommendations?: any; // ADD THIS
+  priority: 'weight_control' | 'digestive_health' | 'ingredient_quality' | 'budget';
+  recommendations?: any;
 }
 
 export function generateFeedingPlanPDF(data: PetData): void {
@@ -121,155 +121,8 @@ export function generateFeedingPlanPDF(data: PetData): void {
   doc.text('This is a general guideline. Always consult your veterinarian for specific dietary advice.', pageWidth / 2, pageHeight - 20, { align: 'center' });
   doc.text('The Feeding Friend | thefeedingfriend.com', pageWidth / 2, pageHeight - 12, { align: 'center' });
   
-  // ===== PAGE 2: Food Recommendations =====
+  // ===== PAGE 2: Food Recommendations (from database) =====
   doc.addPage();
-  
-  // Header
-  doc.setFillColor(...deepTeal);
-  doc.rect(0, 0, pageWidth, 30, 'F');
-  
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(18);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Recommended Foods', pageWidth / 2, 15, { align: 'center' });
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Curated selections based on quality, nutrition, and value', pageWidth / 2, 24, { align: 'center' });
-  
-  const foods = getFoodsBySpecies(species);
-  yPos = 45;
-  
-  const categories = [
-    { key: 'budget', label: 'Budget-Friendly', desc: 'Great nutrition at a lower cost' },
-    { key: 'balanced', label: 'Balanced Choice', desc: 'Optimal balance of quality and price' },
-    { key: 'sensitive', label: 'Sensitive Stomach', desc: 'Gentle formulas for digestive health' },
-    { key: 'premium', label: 'Premium Pick', desc: 'Top-tier ingredients and nutrition' },
-  ];
-  
-  categories.forEach((cat) => {
-    const catFoods = foods.filter(f => f.category === cat.key);
-    if (catFoods.length === 0) return;
-    
-    // Check page break
-    if (yPos > pageHeight - 60) {
-      doc.addPage();
-      yPos = 20;
-    }
-    
-    // Category header
-    doc.setTextColor(...charcoal);
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text(cat.label, margin, yPos);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(100, 100, 100);
-    doc.text(cat.desc, margin, yPos + 6);
-    yPos += 14;
-    
-    catFoods.forEach((food) => {
-      if (yPos > pageHeight - 40) {
-        doc.addPage();
-        yPos = 20;
-      }
-      
-      const portion = calculatePortionSize(dailyCalories, food);
-      const dailyCost = calculateDailyCost(dailyCalories, food);
-      
-      // Food card background
-      doc.setFillColor(...lightGray);
-      doc.roundedRect(margin, yPos, pageWidth - 2 * margin, 22, 2, 2, 'F');
-      
-      doc.setTextColor(...charcoal);
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.text(food.brand, margin + 5, yPos + 8);
-      
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(100, 100, 100);
-      doc.text(food.sku_name.substring(0, 45) + (food.sku_name.length > 45 ? '...' : ''), margin + 5, yPos + 15);
-      
-      // Right side - portion and cost
-      doc.setTextColor(...deepTeal);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`${portion.cups} cups/day`, pageWidth - margin - 5, yPos + 8, { align: 'right' });
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(100, 100, 100);
-      doc.text(`~$${dailyCost.toFixed(2)}/day`, pageWidth - margin - 5, yPos + 15, { align: 'right' });
-      
-      yPos += 28;
-    });
-    
-    yPos += 5;
-  });
-  
-  // ===== PAGE 3: Feeding Tips =====
-  doc.addPage();
-  
-  // Header
-  doc.setFillColor(...deepTeal);
-  doc.rect(0, 0, pageWidth, 30, 'F');
-  
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(18);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Feeding Guidelines', pageWidth / 2, 15, { align: 'center' });
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Customized tips for ${petName}`, pageWidth / 2, 24, { align: 'center' });
-  
-  yPos = 45;
-  
-  const tips = [
-    {
-      title: 'Meal Frequency',
-      content: species === 'dog' 
-        ? 'Adult dogs typically do well with 2 meals per day. Puppies may need 3-4 smaller meals. Split the daily calories evenly between meals.'
-        : 'Cats often prefer multiple small meals throughout the day. Consider leaving dry food out for grazing, or feed 2-4 measured meals.',
-    },
-    {
-      title: 'Hydration',
-      content: 'Fresh, clean water should always be available. Wet food provides additional hydration. Monitor water intake, especially with dry food diets.',
-    },
-    {
-      title: 'Treat Allowance',
-      content: `Treats should make up no more than 10% of daily calories. For ${petName}, that's about ${Math.round(dailyCalories * 0.1)} kcal in treats per day.`,
-    },
-    {
-      title: 'Monitoring Weight',
-      content: 'Weigh your pet every 2-4 weeks during the first few months. Adjust portions by 10% if weight changes unexpectedly.',
-    },
-    {
-      title: 'Transitioning Foods',
-      content: 'When switching foods, transition gradually over 7-10 days. Start with 25% new food, increasing by 25% every 2-3 days.',
-    },
-  ];
-  
-  tips.forEach((tip) => {
-    doc.setTextColor(...charcoal);
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    doc.text(tip.title, margin, yPos);
-    
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(80, 80, 80);
-    const lines = doc.splitTextToSize(tip.content, pageWidth - 2 * margin);
-    doc.text(lines, margin, yPos + 7);
-    
-    yPos += 10 + (lines.length * 5) + 8;
-  });
-  
-// ===== NEW PAGE: Recommended Foods =====
-  doc.addPage();
-  
-  const deepTeal = [45, 125, 123] as const;
-  const charcoal = [45, 52, 54] as const;
-  const lightGray = [248, 249, 250] as const;
-  const margin = 20;
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
   
   // Header
   doc.setFillColor(...deepTeal);
@@ -279,7 +132,7 @@ export function generateFeedingPlanPDF(data: PetData): void {
   doc.setFont('helvetica', 'bold');
   doc.text('Recommended Foods', pageWidth / 2, 16, { align: 'center' });
   
-  let yPos = 35;
+  yPos = 35;
   
   doc.setTextColor(...charcoal);
   doc.setFontSize(10);
@@ -288,7 +141,7 @@ export function generateFeedingPlanPDF(data: PetData): void {
   
   yPos += 15;
   
-  // Render each category
+  // Render each category from database
   const categories: Array<'budget' | 'balanced' | 'premium' | 'sensitive'> = ['budget', 'balanced', 'premium', 'sensitive'];
   
   for (const category of categories) {
@@ -354,7 +207,7 @@ export function generateFeedingPlanPDF(data: PetData): void {
       
       // Cost info
       if (food.calories_per_cup && food.price_per_bag && food.bag_size_cups) {
-        const costInfo = calcCost(food, data.dailyCalories);
+        const costInfo = calcCost(food, dailyCalories);
         doc.setFontSize(8);
         doc.setTextColor(100, 100, 100);
         doc.text(`$${costInfo.costPerDay.toFixed(2)}/day`, margin + 5, yPos + 21);
@@ -365,7 +218,7 @@ export function generateFeedingPlanPDF(data: PetData): void {
       if (food.amazon_url) {
         doc.setFontSize(8);
         doc.setTextColor(0, 102, 204);
-        doc.textWithLink('View on Amazon →', pageWidth - margin - 35, yPos + 21, { url: food.amazon_url });
+        doc.textWithLink('View on Amazon', pageWidth - margin - 35, yPos + 21, { url: food.amazon_url });
       }
       
       yPos += 32;
@@ -373,7 +226,64 @@ export function generateFeedingPlanPDF(data: PetData): void {
     
     yPos += 8;
   }
-
+  
+  // ===== PAGE 3: Feeding Tips =====
+  doc.addPage();
+  
+  // Header
+  doc.setFillColor(...deepTeal);
+  doc.rect(0, 0, pageWidth, 30, 'F');
+  
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Feeding Guidelines', pageWidth / 2, 15, { align: 'center' });
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Customized tips for ${petName}`, pageWidth / 2, 24, { align: 'center' });
+  
+  yPos = 45;
+  
+  const tips = [
+    {
+      title: 'Meal Frequency',
+      content: species === 'dog' 
+        ? 'Adult dogs typically do well with 2 meals per day. Puppies may need 3-4 smaller meals. Split the daily calories evenly between meals.'
+        : 'Cats often prefer multiple small meals throughout the day. Consider leaving dry food out for grazing, or feed 2-4 measured meals.',
+    },
+    {
+      title: 'Hydration',
+      content: 'Fresh, clean water should always be available. Wet food provides additional hydration. Monitor water intake, especially with dry food diets.',
+    },
+    {
+      title: 'Treat Allowance',
+      content: `Treats should make up no more than 10% of daily calories. For ${petName}, that's about ${Math.round(dailyCalories * 0.1)} kcal in treats per day.`,
+    },
+    {
+      title: 'Monitoring Weight',
+      content: 'Weigh your pet every 2-4 weeks during the first few months. Adjust portions by 10% if weight changes unexpectedly.',
+    },
+    {
+      title: 'Transitioning Foods',
+      content: 'When switching foods, transition gradually over 7-10 days. Start with 25% new food, increasing by 25% every 2-3 days.',
+    },
+  ];
+  
+  tips.forEach((tip) => {
+    doc.setTextColor(...charcoal);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text(tip.title, margin, yPos);
+    
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(80, 80, 80);
+    const lines = doc.splitTextToSize(tip.content, pageWidth - 2 * margin);
+    doc.text(lines, margin, yPos + 7);
+    
+    yPos += 10 + (lines.length * 5) + 8;
+  });
+  
   // Treats section
   const treats = getTreatsBySpecies(species);
   if (treats.length > 0 && yPos < pageHeight - 60) {
@@ -409,8 +319,7 @@ export function generateFeedingPlanPDF(data: PetData): void {
   doc.setTextColor(150, 150, 150);
   doc.text('Disclaimer: Individual needs may vary. Always consult with your veterinarian.', pageWidth / 2, pageHeight - 10, { align: 'center' });
   
-
-// ===== FINAL PAGE: Pet Food Guide CTA =====
+  // ===== FINAL PAGE: Pet Food Guide CTA =====
   doc.addPage();
   
   let ctaY = 20;
@@ -419,7 +328,7 @@ export function generateFeedingPlanPDF(data: PetData): void {
   doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...charcoal);
-  doc.text('Want Confidence in What You're Feeding?', pageWidth / 2, ctaY, { align: 'center' });
+  doc.text("Want Confidence in What You're Feeding?", pageWidth / 2, ctaY, { align: 'center' });
   
   ctaY += 15;
   
@@ -521,7 +430,6 @@ export function generateFeedingPlanPDF(data: PetData): void {
   const disclaimer = "This plan is informational only and not a substitute for veterinary advice. Always consult your veterinarian for medical concerns or before making significant dietary changes. Individual animals can vary by up to 50% from predicted calorie needs.";
   const disclaimerLines = doc.splitTextToSize(disclaimer, pageWidth - 2 * margin);
   doc.text(disclaimerLines, pageWidth / 2, ctaY, { align: 'center' });
-
   
   // Save
   doc.save(`${petName}_Feeding_Plan.pdf`);
