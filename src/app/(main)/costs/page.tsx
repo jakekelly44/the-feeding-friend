@@ -371,13 +371,9 @@ export default function CostsPage() {
 
         {/* Total Cost Display */}
         <div className="text-center mb-4">
-          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">This {period.charAt(0).toUpperCase() + period.slice(1)}</div>
-          <div className="text-3xl font-bold text-charcoal">
+          <div className="text-4xl font-bold text-charcoal">
             {formatCost(totalCost)}
           </div>
-          {hasEstimates && (
-            <div className="text-xs text-orange-500 mt-1">~estimated</div>
-          )}
         </div>
 
         {/* Period Selector */}

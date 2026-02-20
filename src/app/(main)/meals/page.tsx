@@ -947,9 +947,6 @@ export default function MealsPage() {
               <div className="text-xl font-bold text-charcoal">
                 {formatCost(monthlyCost)}
               </div>
-              {hasEstimates && (
-                <div className="text-xs text-orange-500 mt-1">~estimated</div>
-              )}
             </div>
           </div>
         </div>

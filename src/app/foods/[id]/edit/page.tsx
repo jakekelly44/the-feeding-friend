@@ -450,6 +450,7 @@ export default function EditFoodPage() {
                     <option value="g">g</option>
                     <option value="can">can</option>
                     <option value="bag">bag</option>
+                    <option value="piece">pieces</option>
                   </select>
                 </div>
               </div>

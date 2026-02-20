@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Settings, Bell, LogOut, User, ChevronRight, Edit2 } from 'lucide-react';
+import { Settings, LogOut, User, ChevronRight, Edit2 } from 'lucide-react';
 import PhotoUpload from '@/components/PhotoUpload';
 
 interface Profile {
@@ -12,7 +12,7 @@ interface Profile {
   email: string;
   avatar_url: string | null;
   preferred_unit: 'lb' | 'kg';
-  notifications_enabled: boolean;
+  is_premium: boolean;
 }
 
 export default function AccountPage() {
@@ -47,7 +47,7 @@ export default function AccountPage() {
           email: user.email || '',
           avatar_url: data.avatar_url,
           preferred_unit: data.preferred_unit || 'lb',
-          notifications_enabled: data.notifications_enabled !== false,
+          is_premium: data.is_premium || false,
         });
         setNewName(data.full_name || '');
       }
@@ -115,27 +115,7 @@ export default function AccountPage() {
     }
   };
 
-  const handleNotificationsToggle = async () => {
-    if (!profile) return;
-    
-    const newValue = !profile.notifications_enabled;
-    
-    try {
-      const supabase = createClient();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any)
-        .from('profiles')
-        .update({ notifications_enabled: newValue })
-        .eq('id', profile.id);
-      
-      setProfile({ ...profile, notifications_enabled: newValue });
-    } catch (err) {
-      console.error('Error updating notifications:', err);
-      alert('Failed to update notification settings.');
-    }
-  };
-
-  const handleSignOut = async () => {
+  const handleSignOut = async () {
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push('/');
@@ -262,28 +242,6 @@ export default function AccountPage() {
             </div>
           </div>
 
-          {/* Notifications */}
-          <div className="flex items-center justify-between py-2 border-t border-gray-50">
-            <div className="flex items-center gap-3">
-              <Bell className="w-5 h-5 text-gray-400" />
-              <div>
-                <p className="font-medium text-charcoal">Notifications</p>
-                <p className="text-xs text-gray-500">Feeding reminders and updates</p>
-              </div>
-            </div>
-            <button
-              onClick={handleNotificationsToggle}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                profile.notifications_enabled ? 'bg-deep-teal' : 'bg-gray-300'
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  profile.notifications_enabled ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
-            </button>
-          </div>
         </div>
       </div>
 
