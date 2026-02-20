@@ -21,6 +21,7 @@ interface Pet {
   calorie_override: number | null;
   calculation_breakdown: Record<string, { label: string; value: number }> | null;
   photo_url: string | null;
+  priority: 'weight_control' | 'digestive_health' | 'ingredient_quality' | 'budget' | null;
 }
 
 export default function PetProfilePage() {
@@ -33,6 +34,8 @@ export default function PetProfilePage() {
   const [mounted, setMounted] = useState(false);
   const [editingCalories, setEditingCalories] = useState(false);
   const [calorieOverride, setCalorieOverride] = useState<string>('');
+  const [editingPriority, setEditingPriority] = useState(false);
+  const [selectedPriority, setSelectedPriority] = useState<string>('weight_control');
 
   // Fix hydration - only render after mount
   useEffect(() => {
@@ -56,6 +59,7 @@ export default function PetProfilePage() {
         return;
       }
       setPet(data);
+      setSelectedPriority(data.priority || 'weight_control');
       setLoading(false);
     }
     fetchPet();
@@ -66,6 +70,13 @@ export default function PetProfilePage() {
     setDownloading(true);
     
     try {
+      // Fetch recommended foods from database
+      const { getRecommendedFoods } = await import('@/lib/food-recommendations');
+      const recommendations = await getRecommendedFoods(
+        pet.species, 
+        pet.priority || 'weight_control'
+      );
+      
       // Dynamic import to avoid SSR issues with jspdf
       const { generateFeedingPlanPDF } = await import('@/lib/pdf-generator');
       generateFeedingPlanPDF({
@@ -76,6 +87,8 @@ export default function PetProfilePage() {
         weightUnit: pet.weight_unit,
         dailyCalories: pet.daily_calories,
         breakdown: pet.calculation_breakdown,
+        priority: pet.priority || 'weight_control',
+        recommendations: recommendations,
       });
     } catch (err) {
       console.error('PDF generation error:', err);
@@ -207,6 +220,35 @@ export default function PetProfilePage() {
     } catch (err) {
       console.error('Error resetting calories:', err);
     }
+  };
+
+  const handlePriorityUpdate = async () => {
+    if (!pet) return;
+    
+    try {
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('pets')
+        .update({ priority: selectedPriority })
+        .eq('id', pet.id);
+      
+      setPet({ ...pet, priority: selectedPriority as any });
+      setEditingPriority(false);
+    } catch (err) {
+      console.error('Error updating priority:', err);
+      alert('Failed to update priority');
+    }
+  };
+
+  const getPriorityDescription = (priority: string) => {
+    const descriptions = {
+      weight_control: 'Focused on maintaining a healthy weight',
+      digestive_health: 'Gentle formulas for sensitive stomachs',
+      ingredient_quality: 'Premium, high-quality ingredients',
+      budget: 'Great nutrition at a lower cost',
+    };
+    return descriptions[priority as keyof typeof descriptions] || '';
   };
 
   if (!mounted) {
@@ -383,6 +425,64 @@ export default function PetProfilePage() {
                 </div>
               )}
             </>
+          )}
+        </div>
+
+        {/* Priority Selector */}
+        <div className="bg-white rounded-card p-4 shadow-card">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-deep-teal">What Matters Most?</h3>
+            {!editingPriority && (
+              <button
+                onClick={() => setEditingPriority(true)}
+                className="text-sm text-deep-teal font-medium flex items-center gap-1"
+              >
+                <Pencil className="w-4 h-4" />
+                Edit
+              </button>
+            )}
+          </div>
+          
+          {editingPriority ? (
+            <div className="space-y-3">
+              <select
+                value={selectedPriority}
+                onChange={(e) => setSelectedPriority(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-200 rounded-button focus:border-deep-teal focus:ring-1 focus:ring-deep-teal outline-none"
+              >
+                <option value="weight_control">Weight Control - Help manage a healthy weight</option>
+                <option value="digestive_health">Digestive Health - Gentle on sensitive stomachs</option>
+                <option value="ingredient_quality">Ingredient Quality - Premium, whole food ingredients</option>
+                <option value="budget">Budget - Great nutrition at lower cost</option>
+              </select>
+              
+              <div className="flex gap-2">
+                <button
+                  onClick={handlePriorityUpdate}
+                  className="flex-1 py-2 bg-deep-teal text-white rounded-button font-medium"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedPriority(pet?.priority || 'weight_control');
+                    setEditingPriority(false);
+                  }}
+                  className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-button font-medium"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-2">
+              <div className="text-lg font-semibold text-charcoal capitalize mb-1">
+                {(pet?.priority || 'weight_control').replace(/_/g, ' ')}
+              </div>
+              <div className="text-sm text-gray-500">
+                {getPriorityDescription(pet?.priority || 'weight_control')}
+              </div>
+            </div>
           )}
         </div>
 

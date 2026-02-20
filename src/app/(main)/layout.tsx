@@ -28,7 +28,7 @@ export default async function MainLayout({
       {children}
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-6 py-3 z-50">
+      <nav className="no-print fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-6 py-3 z-50">
         <div className="flex justify-between items-center max-w-lg mx-auto">
           {navItems.map((item) => (
             <Link

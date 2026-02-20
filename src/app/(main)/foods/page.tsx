@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Plus, ScanLine } from 'lucide-react';
+import { Search, Plus } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 type ItemType = 'dry' | 'wet' | 'raw' | 'treat' | 'supplement';
@@ -149,18 +149,8 @@ export default function FoodsPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search foods..."
-            className="w-full pl-10 pr-12 py-3 bg-white border border-gray-200 rounded-button text-charcoal placeholder:text-gray-400 focus:outline-none focus:border-deep-teal focus:ring-1 focus:ring-deep-teal"
+            className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-button text-charcoal placeholder:text-gray-400 focus:outline-none focus:border-deep-teal focus:ring-1 focus:ring-deep-teal"
           />
-          {/* OCR Scan Button (Premium) */}
-          <button 
-            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-deep-teal"
-            onClick={() => {
-              // TODO: Check premium status and show OCR or upsell
-              alert('OCR scanning is a premium feature');
-            }}
-          >
-            <ScanLine className="w-5 h-5" />
-          </button>
         </div>
 
         {/* Filter Pills */}
