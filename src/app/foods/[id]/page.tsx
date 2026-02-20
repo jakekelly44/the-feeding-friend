@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, Edit2, Check } from 'lucide-react';
+import { ArrowLeft, Edit2, Check, Camera } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import OCRScanner from '@/components/OCRScanner';
+import PremiumUpgradeModal from '@/components/PremiumUpgradeModal';
+import { usePremiumStatus } from '@/hooks/usePremiumStatus';
 
 type ItemType = 'dry' | 'wet' | 'raw' | 'treat' | 'supplement';
 
@@ -75,6 +78,9 @@ export default function FoodDetailPage() {
   const [portionAmount, setPortionAmount] = useState<string>('1');
   const [addingToMeal, setAddingToMeal] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [showOCRScanner, setShowOCRScanner] = useState(false);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const { isPremium, loading: premiumLoading } = usePremiumStatus();
 
   // Fetch food details
   useEffect(() => {
@@ -169,6 +175,28 @@ export default function FoodDetailPage() {
     fetchMeals();
   }, [selectedPetId]);
 
+  const handleOCRClick = () => {
+    if (!isPremium) {
+      setShowPremiumModal(true);
+      return;
+    }
+    setShowOCRScanner(true);
+  };
+
+  const handleOCRExtract = (data: any) => {
+    console.log('Extracted nutrition data:', data);
+    setShowOCRScanner(false);
+    
+    const message = `OCR Scan Complete!\n\nExtracted:\n` +
+      `Calories: ${data.calories || 'N/A'} kcal\n` +
+      `Protein: ${data.protein || 'N/A'}%\n` +
+      `Fat: ${data.fat || 'N/A'}%\n` +
+      `Fiber: ${data.fiber || 'N/A'}%\n\n` +
+      `Note: This is a food detail page. For auto-fill,\nuse "Add New Food" page.`;
+    
+    alert(message);
+  };
+
   const handleAddToMeal = async () => {
     if (!selectedPetId || !selectedMealId || !food || !portionAmount) return;
 
@@ -179,7 +207,7 @@ export default function FoodDetailPage() {
     }
 
     // Calculate calories for this portion
-    const calculatedCalories = Math.round(food.calories_per_unit * portion);
+    const calculatedCalories = food.calories_per_unit * portion;
 
     // Get selected pet to check against daily calories
     const selectedPet = pets.find(p => p.id === selectedPetId);
@@ -414,6 +442,24 @@ export default function FoodDetailPage() {
             )}
           </div>
 
+          {/* OCR Scan Option */}
+          <div className="text-center py-2 mb-4">
+            <button
+              type="button"
+              onClick={handleOCRClick}
+              disabled={premiumLoading}
+              className="text-sm text-deep-teal hover:text-deep-teal-600 underline font-medium flex items-center justify-center gap-2 mx-auto disabled:opacity-50"
+            >
+              <Camera className="w-4 h-4" />
+              Scan nutrition label
+              {!isPremium && (
+                <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full ml-1">
+                  Premium
+                </span>
+              )}
+            </button>
+          </div>
+
           {/* Add Button */}
           <button
             onClick={handleAddToMeal}
@@ -500,6 +546,22 @@ export default function FoodDetailPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* OCR Scanner Modal */}
+      {showOCRScanner && (
+        <OCRScanner
+          onExtract={handleOCRExtract}
+          onClose={() => setShowOCRScanner(false)}
+        />
+      )}
+
+      {/* Premium Upgrade Modal */}
+      {showPremiumModal && (
+        <PremiumUpgradeModal
+          onClose={() => setShowPremiumModal(false)}
+          feature="OCR nutrition label scanning"
+        />
       )}
     </div>
   );

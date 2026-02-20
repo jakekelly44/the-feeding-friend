@@ -2,9 +2,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Camera } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import PhotoUpload from '@/components/PhotoUpload';
+import OCRScanner from '@/components/OCRScanner';
+import PremiumUpgradeModal from '@/components/PremiumUpgradeModal';
+import { usePremiumStatus } from '@/hooks/usePremiumStatus';
 
 type ItemType = 'dry' | 'wet' | 'raw' | 'treat' | 'supplement';
 type ServingUnit = 'cup' | 'can' | 'oz' | 'g' | 'piece' | 'scoop' | 'pump';
@@ -63,9 +66,50 @@ export default function AddFoodPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [showCostSection, setShowCostSection] = useState(false);
+  const [showOCRScanner, setShowOCRScanner] = useState(false);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const { isPremium, loading: premiumLoading } = usePremiumStatus();
 
   const updateField = <K extends keyof FormData>(key: K, value: FormData[K]) => {
     setFormData(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleOCRClick = () => {
+    if (!isPremium) {
+      setShowPremiumModal(true);
+      return;
+    }
+    setShowOCRScanner(true);
+  };
+
+  const handleOCRExtract = (data: any) => {
+    console.log('Extracted nutrition data:', data);
+    
+    // Auto-fill form fields
+    if (data.brand) {
+      updateField('brand', data.brand);
+    }
+    if (data.productName) {
+      updateField('name', data.productName);
+    }
+    if (data.calories) {
+      updateField('caloriesPerUnit', data.calories.toString());
+    }
+    if (data.protein) {
+      updateField('proteinPercent', data.protein.toString());
+    }
+    if (data.fat) {
+      updateField('fatPercent', data.fat.toString());
+    }
+    if (data.fiber) {
+      updateField('fiberPercent', data.fiber.toString());
+    }
+    if (data.servingUnit) {
+      updateField('servingUnit', data.servingUnit as ServingUnit);
+    }
+    
+    setShowOCRScanner(false);
+    alert('Nutrition data extracted and form pre-filled!');
   };
 
   const canSave = () => {
@@ -158,6 +202,29 @@ export default function AddFoodPage() {
             {saving ? 'Saving...' : 'Save'}
           </button>
         </div>
+      </div>
+
+      {/* OCR Scan Button */}
+      <div className="px-4 pb-4">
+        <button
+          type="button"
+          onClick={handleOCRClick}
+          disabled={premiumLoading}
+          className="w-full py-3 bg-deep-teal text-white rounded-button font-semibold hover:bg-deep-teal-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+        >
+          <Camera className="w-5 h-5" />
+          Scan Nutrition Label
+          {!isPremium && (
+            <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">
+              Premium
+            </span>
+          )}
+        </button>
+        {!isPremium && (
+          <p className="text-xs text-center text-gray-500 mt-2">
+            Upgrade to Premium to scan labels and auto-fill nutrition data
+          </p>
+        )}
       </div>
 
       {/* Form */}
@@ -385,6 +452,22 @@ export default function AddFoodPage() {
           {saving ? 'Saving...' : 'Save Food'}
         </button>
       </div>
+
+      {/* OCR Scanner Modal */}
+      {showOCRScanner && (
+        <OCRScanner
+          onExtract={handleOCRExtract}
+          onClose={() => setShowOCRScanner(false)}
+        />
+      )}
+
+      {/* Premium Upgrade Modal */}
+      {showPremiumModal && (
+        <PremiumUpgradeModal
+          onClose={() => setShowPremiumModal(false)}
+          feature="OCR nutrition label scanning"
+        />
+      )}
     </div>
   );
 }
