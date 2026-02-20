@@ -13,6 +13,7 @@ import {
   formatWeight,
 } from '@/lib/meal-utils';
 import { calculateDailyCost, calculatePeriodCost, formatCost } from '@/lib/cost-utils';
+import EnhancedFoodItem from '@/components/EnhancedFoodItem';
 
 interface Pet {
   id: string;
@@ -468,15 +469,14 @@ export default function MealsPage() {
     }
   };
 
-  const handlePortionChange = async (mealId: string, itemId: string, newPortionStr: string) => {
+  const handlePortionChange = async (mealId: string, itemId: string, quantity: number, unit: string) => {
     const items = mealItems[mealId] || [];
     const item = items.find(i => i.id === itemId);
     if (!item) return;
 
-    const newPortion = parseFraction(newPortionStr);
-    if (isNaN(newPortion) || newPortion <= 0) return;
+    if (isNaN(quantity) || quantity <= 0) return;
 
-    const newCalories = calculateCalories(newPortion, item.food.calories_per_unit);
+    const newCalories = calculateCalories(quantity, item.food.calories_per_unit);
 
     try {
       const supabase = createClient();
@@ -485,7 +485,8 @@ export default function MealsPage() {
       await (supabase as any)
         .from('meal_items')
         .update({
-          portion_quantity: newPortion,
+          portion_quantity: quantity,
+          portion_unit: unit,
           calculated_calories: newCalories,
           manually_adjusted: true,
         })
@@ -857,56 +858,14 @@ export default function MealsPage() {
                         items.map((item) => {
                           const style = FOOD_TYPE_STYLES[item.food.item_type] || FOOD_TYPE_STYLES.dry;
                           return (
-                            <div
+                            <EnhancedFoodItem
                               key={item.id}
+                              item={item}
+                              mealId={meal.id}
+                              onPortionChange={handlePortionChange}
+                              onDelete={handleDeleteItem}
                               onClick={() => handleFoodClick(item.food.id)}
-                              className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer group"
-                            >
-                              <div className={`w-12 h-12 ${style.bg} rounded-xl flex items-center justify-center text-xl flex-shrink-0`}>
-                                {item.food.image_url ? (
-                                  <img 
-                                    src={item.food.image_url} 
-                                    alt={item.food.name}
-                                    className="w-full h-full object-cover rounded-xl"
-                                  />
-                                ) : (
-                                  style.emoji
-                                )}
-                              </div>
-
-                              <div className="flex-1 min-w-0">
-                                <h4 className="font-semibold text-charcoal text-sm truncate group-hover:text-deep-teal transition-colors">
-                                  {item.food.name}
-                                </h4>
-                                <p className="text-xs text-gray-500 truncate mb-2">{item.food.brand}</p>
-                                
-                                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                                  <input
-                                    type="text"
-                                    defaultValue={formatPortion(item.portion_quantity, item.portion_unit)}
-                                    onBlur={(e) => handlePortionChange(meal.id, item.id, e.target.value)}
-                                    className="w-24 px-2 py-1 text-xs border border-gray-200 rounded focus:border-deep-teal focus:ring-1 focus:ring-deep-teal focus:outline-none print:border-none"
-                                  />
-                                  {item.portion_grams && (
-                                    <span className="text-xs text-gray-400">
-                                      {formatWeight(item.portion_grams, item.portion_unit)}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-
-                              <div className="flex flex-col items-end gap-2" onClick={(e) => e.stopPropagation()}>
-                                <span className="font-bold text-deep-teal text-sm whitespace-nowrap">
-                                  {item.calculated_calories} kcal
-                                </span>
-                                <button
-                                  onClick={() => handleDeleteItem(meal.id, item.id)}
-                                  className="no-print p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </div>
+                            />
                           );
                         })
                       )}
