@@ -179,7 +179,7 @@ export default function FoodDetailPage() {
     }
 
     // Calculate calories for this portion
-    const calculatedCalories = food.calories_per_unit * portion;
+    const calculatedCalories = Math.round(food.calories_per_unit * portion);
 
     // Get selected pet to check against daily calories
     const selectedPet = pets.find(p => p.id === selectedPetId);
