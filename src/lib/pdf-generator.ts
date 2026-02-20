@@ -10,7 +10,7 @@ interface PetData {
   weightUnit: 'lb' | 'kg';
   dailyCalories: number;
   breakdown: Record<string, { label: string; value: number }> | null;
-  priority: 'weight_control' | 'digestive_health' | 'ingredient_quality' | 'budget';
+  priority?: 'weight_control' | 'digestive_health' | 'ingredient_quality' | 'budget';
   recommendations?: any;
 }
 
@@ -121,7 +121,7 @@ export function generateFeedingPlanPDF(data: PetData): void {
   doc.text('This is a general guideline. Always consult your veterinarian for specific dietary advice.', pageWidth / 2, pageHeight - 20, { align: 'center' });
   doc.text('The Feeding Friend | thefeedingfriend.com', pageWidth / 2, pageHeight - 12, { align: 'center' });
   
-  // ===== PAGE 2: Food Recommendations (from database) =====
+  // ===== PAGE 2: Food Recommendations =====
   doc.addPage();
   
   // Header
@@ -141,90 +141,158 @@ export function generateFeedingPlanPDF(data: PetData): void {
   
   yPos += 15;
   
-  // Render each category from database
-  const categories: Array<'budget' | 'balanced' | 'premium' | 'sensitive'> = ['budget', 'balanced', 'premium', 'sensitive'];
-  
-  for (const category of categories) {
-    const foods = data.recommendations?.[category] || [];
-    if (foods.length === 0) continue;
+  // If we have database recommendations, use those
+  if (data.recommendations) {
+    const categories: Array<'budget' | 'balanced' | 'premium' | 'sensitive'> = ['budget', 'balanced', 'premium', 'sensitive'];
     
-    const sectionInfo = getSectionInfo(category);
-    
-    // Check if need new page
-    if (yPos > pageHeight - 60) {
-      doc.addPage();
-      yPos = 20;
-    }
-    
-    // Category header
-    doc.setFillColor(...lightGray);
-    doc.rect(margin, yPos, pageWidth - 2 * margin, 12, 'F');
-    
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...deepTeal);
-    doc.text(sectionInfo.title, margin + 5, yPos + 8);
-    
-    yPos += 14;
-    
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'italic');
-    doc.setTextColor(100, 100, 100);
-    doc.text(sectionInfo.description, margin + 5, yPos);
-    
-    yPos += 10;
-    
-    // Show top 2 foods
-    const topFoods = foods.slice(0, 2);
-    
-    for (const food of topFoods) {
-      if (yPos > pageHeight - 40) {
+    for (const category of categories) {
+      const foods = data.recommendations[category] || [];
+      if (foods.length === 0) continue;
+      
+      const sectionInfo = getSectionInfo(category);
+      
+      if (yPos > pageHeight - 60) {
         doc.addPage();
         yPos = 20;
       }
       
-      // Food box
-      doc.setDrawColor(200, 200, 200);
-      doc.rect(margin, yPos, pageWidth - 2 * margin, 28, 'S');
+      // Category header
+      doc.setFillColor(...lightGray);
+      doc.rect(margin, yPos, pageWidth - 2 * margin, 12, 'F');
       
-      // Brand
-      doc.setFontSize(10);
+      doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...charcoal);
-      doc.text(food.brand || '', margin + 5, yPos + 8);
+      doc.setTextColor(...deepTeal);
+      doc.text(sectionInfo.title, margin + 5, yPos + 8);
       
-      // Product name with link
+      yPos += 14;
+      
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'italic');
+      doc.setTextColor(100, 100, 100);
+      doc.text(sectionInfo.description, margin + 5, yPos);
+      
+      yPos += 10;
+      
+      // Show top 2 foods
+      const topFoods = foods.slice(0, 2);
+      
+      for (const food of topFoods) {
+        if (yPos > pageHeight - 40) {
+          doc.addPage();
+          yPos = 20;
+        }
+        
+        // Food box
+        doc.setDrawColor(200, 200, 200);
+        doc.rect(margin, yPos, pageWidth - 2 * margin, 28, 'S');
+        
+        // Brand
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...charcoal);
+        doc.text(food.brand || '', margin + 5, yPos + 8);
+        
+        // Product name with link
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        
+        if (food.amazon_url) {
+          doc.setTextColor(0, 102, 204);
+          doc.textWithLink(food.name || '', margin + 5, yPos + 15, { url: food.amazon_url });
+        } else {
+          doc.setTextColor(...charcoal);
+          doc.text(food.name || '', margin + 5, yPos + 15);
+        }
+        
+        // Cost info
+        if (food.calories_per_cup && food.price_per_bag && food.bag_size_cups) {
+          const costInfo = calcCost(food, dailyCalories);
+          doc.setFontSize(8);
+          doc.setTextColor(100, 100, 100);
+          doc.text(`$${costInfo.costPerDay.toFixed(2)}/day`, margin + 5, yPos + 21);
+          doc.text(`${costInfo.cupsPerDay.toFixed(2)} ${food.style || 'cups'}/day`, margin + 60, yPos + 21);
+        }
+        
+        // Amazon link
+        if (food.amazon_url) {
+          doc.setFontSize(8);
+          doc.setTextColor(0, 102, 204);
+          doc.textWithLink('View on Amazon', pageWidth - margin - 35, yPos + 21, { url: food.amazon_url });
+        }
+        
+        yPos += 32;
+      }
+      
+      yPos += 8;
+    }
+  } else {
+    // Fallback to old static recommendations if no database data
+    const foods = getFoodsBySpecies(species);
+    
+    const categories = [
+      { key: 'budget', label: 'Budget-Friendly', desc: 'Great nutrition at a lower cost' },
+      { key: 'balanced', label: 'Balanced Choice', desc: 'Optimal balance of quality and price' },
+      { key: 'sensitive', label: 'Sensitive Stomach', desc: 'Gentle formulas for digestive health' },
+      { key: 'premium', label: 'Premium Pick', desc: 'Top-tier ingredients and nutrition' },
+    ];
+    
+    categories.forEach((cat) => {
+      const catFoods = foods.filter(f => f.category === cat.key);
+      if (catFoods.length === 0) return;
+      
+      if (yPos > pageHeight - 60) {
+        doc.addPage();
+        yPos = 20;
+      }
+      
+      // Category header
+      doc.setTextColor(...charcoal);
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text(cat.label, margin, yPos);
       doc.setFontSize(9);
       doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 100, 100);
+      doc.text(cat.desc, margin, yPos + 6);
+      yPos += 14;
       
-      if (food.amazon_url) {
-        doc.setTextColor(0, 102, 204);
-        doc.textWithLink(food.name || '', margin + 5, yPos + 15, { url: food.amazon_url });
-      } else {
+      catFoods.forEach((food) => {
+        if (yPos > pageHeight - 40) {
+          doc.addPage();
+          yPos = 20;
+        }
+        
+        const portion = calculatePortionSize(dailyCalories, food);
+        const dailyCost = calculateDailyCost(dailyCalories, food);
+        
+        // Food card background
+        doc.setFillColor(...lightGray);
+        doc.roundedRect(margin, yPos, pageWidth - 2 * margin, 22, 2, 2, 'F');
+        
         doc.setTextColor(...charcoal);
-        doc.text(food.name || '', margin + 5, yPos + 15);
-      }
-      
-      // Cost info
-      if (food.calories_per_cup && food.price_per_bag && food.bag_size_cups) {
-        const costInfo = calcCost(food, dailyCalories);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text(food.brand, margin + 5, yPos + 8);
+        
         doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
         doc.setTextColor(100, 100, 100);
-        doc.text(`$${costInfo.costPerDay.toFixed(2)}/day`, margin + 5, yPos + 21);
-        doc.text(`${costInfo.cupsPerDay.toFixed(2)} ${food.style || 'cups'}/day`, margin + 60, yPos + 21);
-      }
+        doc.text(food.sku_name.substring(0, 45) + (food.sku_name.length > 45 ? '...' : ''), margin + 5, yPos + 15);
+        
+        // Right side - portion and cost
+        doc.setTextColor(...deepTeal);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${portion.cups} cups/day`, pageWidth - margin - 5, yPos + 8, { align: 'right' });
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 100, 100);
+        doc.text(`~$${dailyCost.toFixed(2)}/day`, pageWidth - margin - 5, yPos + 15, { align: 'right' });
+        
+        yPos += 28;
+      });
       
-      // Amazon link
-      if (food.amazon_url) {
-        doc.setFontSize(8);
-        doc.setTextColor(0, 102, 204);
-        doc.textWithLink('View on Amazon', pageWidth - margin - 35, yPos + 21, { url: food.amazon_url });
-      }
-      
-      yPos += 32;
-    }
-    
-    yPos += 8;
+      yPos += 5;
+    });
   }
   
   // ===== PAGE 3: Feeding Tips =====
@@ -319,117 +387,119 @@ export function generateFeedingPlanPDF(data: PetData): void {
   doc.setTextColor(150, 150, 150);
   doc.text('Disclaimer: Individual needs may vary. Always consult with your veterinarian.', pageWidth / 2, pageHeight - 10, { align: 'center' });
   
-  // ===== FINAL PAGE: Pet Food Guide CTA =====
-  doc.addPage();
-  
-  let ctaY = 20;
-  
-  // Title
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...charcoal);
-  doc.text("Want Confidence in What You're Feeding?", pageWidth / 2, ctaY, { align: 'center' });
-  
-  ctaY += 15;
-  
-  // Body paragraphs
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(80, 80, 80);
-  
-  const paragraphs = [
-    "You've already built a feeding plan — that answers how much to feed.",
-    "",
-    "The Pet Food Guide helps with the harder question: what food actually",
-    "deserves to be in the bowl.",
-    "",
-    "Instead of marketing claims or brand rankings, the guide breaks down:",
-  ];
-  
-  paragraphs.forEach(para => {
-    doc.text(para, pageWidth / 2, ctaY, { align: 'center' });
-    ctaY += 5;
-  });
-  
-  ctaY += 3;
-  
-  // Bullets
-  const bullets = [
-    "• how to read pet food labels without the hype",
-    "• what terms like 'human-grade,' 'fresh,' and 'complete' really mean",
-    "• which brands prioritize ingredient quality, transparency, and safety"
-  ];
-  
-  bullets.forEach(bullet => {
-    doc.text(bullet, margin + 10, ctaY);
+  // ===== FINAL PAGE: Pet Food Guide CTA (only if from pet profile with recommendations) =====
+  if (data.recommendations) {
+    doc.addPage();
+    
+    let ctaY = 20;
+    
+    // Title
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...charcoal);
+    doc.text("Want Confidence in What You're Feeding?", pageWidth / 2, ctaY, { align: 'center' });
+    
+    ctaY += 15;
+    
+    // Body paragraphs
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(80, 80, 80);
+    
+    const paragraphs = [
+      "You've already built a feeding plan — that answers how much to feed.",
+      "",
+      "The Pet Food Guide helps with the harder question: what food actually",
+      "deserves to be in the bowl.",
+      "",
+      "Instead of marketing claims or brand rankings, the guide breaks down:",
+    ];
+    
+    paragraphs.forEach(para => {
+      doc.text(para, pageWidth / 2, ctaY, { align: 'center' });
+      ctaY += 5;
+    });
+    
+    ctaY += 3;
+    
+    // Bullets
+    const bullets = [
+      "• how to read pet food labels without the hype",
+      "• what terms like 'human-grade,' 'fresh,' and 'complete' really mean",
+      "• which brands prioritize ingredient quality, transparency, and safety"
+    ];
+    
+    bullets.forEach(bullet => {
+      doc.text(bullet, margin + 10, ctaY);
+      ctaY += 6;
+    });
+    
     ctaY += 6;
-  });
-  
-  ctaY += 6;
-  
-  doc.text("It's built to reduce decision fatigue — not create more choices.", pageWidth / 2, ctaY, { align: 'center' });
-  ctaY += 10;
-  
-  // "Inside" section
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.text("Inside the Pet Food Guide you'll find:", pageWidth / 2, ctaY, { align: 'center' });
-  ctaY += 8;
-  
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  
-  const insideBullets = [
-    "• 50+ carefully curated food options across dry, cooked, raw, and freeze-dried",
-    "• Clear explanations, not paid endorsements",
-    "• Pros and tradeoffs for each category of food",
-    "• Guidance you can reuse every time you shop — not just once"
-  ];
-  
-  insideBullets.forEach(bullet => {
-    doc.text(bullet, margin + 10, ctaY);
-    ctaY += 6;
-  });
-  
-  ctaY += 8;
-  
-  doc.setFont('helvetica', 'italic');
-  doc.text("No ads. No sponsored placements. No pressure to buy anything specific.", pageWidth / 2, ctaY, { align: 'center' });
-  ctaY += 10;
-  
-  doc.setFont('helvetica', 'normal');
-  const finalText = [
-    "If you want to feel confident that the food you're choosing actually aligns",
-    "with the plan you just built, the Pet Food Guide was made for you."
-  ];
-  
-  finalText.forEach(line => {
-    doc.text(line, pageWidth / 2, ctaY, { align: 'center' });
-    ctaY += 5;
-  });
-  
-  ctaY += 10;
-  
-  // CTA Button
-  doc.setFillColor(...deepTeal);
-  doc.roundedRect(pageWidth / 2 - 40, ctaY, 80, 12, 3, 3, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Get the Pet Food Guide', pageWidth / 2, ctaY + 8, { align: 'center' });
-  
-  // Make it clickable
-  doc.link(pageWidth / 2 - 40, ctaY, 80, 12, { url: 'https://the-remote-roadmap.kit.com/products/pet-food-guide' });
-  
-  ctaY += 20;
-  
-  // Disclaimer
-  doc.setFontSize(7);
-  doc.setFont('helvetica', 'italic');
-  doc.setTextColor(120, 120, 120);
-  const disclaimer = "This plan is informational only and not a substitute for veterinary advice. Always consult your veterinarian for medical concerns or before making significant dietary changes. Individual animals can vary by up to 50% from predicted calorie needs.";
-  const disclaimerLines = doc.splitTextToSize(disclaimer, pageWidth - 2 * margin);
-  doc.text(disclaimerLines, pageWidth / 2, ctaY, { align: 'center' });
+    
+    doc.text("It's built to reduce decision fatigue — not create more choices.", pageWidth / 2, ctaY, { align: 'center' });
+    ctaY += 10;
+    
+    // "Inside" section
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text("Inside the Pet Food Guide you'll find:", pageWidth / 2, ctaY, { align: 'center' });
+    ctaY += 8;
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    
+    const insideBullets = [
+      "• 50+ carefully curated food options across dry, cooked, raw, and freeze-dried",
+      "• Clear explanations, not paid endorsements",
+      "• Pros and tradeoffs for each category of food",
+      "• Guidance you can reuse every time you shop — not just once"
+    ];
+    
+    insideBullets.forEach(bullet => {
+      doc.text(bullet, margin + 10, ctaY);
+      ctaY += 6;
+    });
+    
+    ctaY += 8;
+    
+    doc.setFont('helvetica', 'italic');
+    doc.text("No ads. No sponsored placements. No pressure to buy anything specific.", pageWidth / 2, ctaY, { align: 'center' });
+    ctaY += 10;
+    
+    doc.setFont('helvetica', 'normal');
+    const finalText = [
+      "If you want to feel confident that the food you're choosing actually aligns",
+      "with the plan you just built, the Pet Food Guide was made for you."
+    ];
+    
+    finalText.forEach(line => {
+      doc.text(line, pageWidth / 2, ctaY, { align: 'center' });
+      ctaY += 5;
+    });
+    
+    ctaY += 10;
+    
+    // CTA Button
+    doc.setFillColor(...deepTeal);
+    doc.roundedRect(pageWidth / 2 - 40, ctaY, 80, 12, 3, 3, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Get the Pet Food Guide', pageWidth / 2, ctaY + 8, { align: 'center' });
+    
+    // Make it clickable
+    doc.link(pageWidth / 2 - 40, ctaY, 80, 12, { url: 'https://the-remote-roadmap.kit.com/products/pet-food-guide' });
+    
+    ctaY += 20;
+    
+    // Disclaimer
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(120, 120, 120);
+    const disclaimer = "This plan is informational only and not a substitute for veterinary advice. Always consult your veterinarian for medical concerns or before making significant dietary changes. Individual animals can vary by up to 50% from predicted calorie needs.";
+    const disclaimerLines = doc.splitTextToSize(disclaimer, pageWidth - 2 * margin);
+    doc.text(disclaimerLines, pageWidth / 2, ctaY, { align: 'center' });
+  }
   
   // Save
   doc.save(`${petName}_Feeding_Plan.pdf`);
