@@ -76,11 +76,67 @@ export default function FoodDetailPage() {
   const [selectedPetId, setSelectedPetId] = useState<string>('');
   const [selectedMealId, setSelectedMealId] = useState<string>('');
   const [portionAmount, setPortionAmount] = useState<string>('1');
+  const [portionUnit, setPortionUnit] = useState<string>('');
   const [addingToMeal, setAddingToMeal] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [showOCRScanner, setShowOCRScanner] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const { isPremium, loading: premiumLoading } = usePremiumStatus();
+
+  // Available portion units
+  const PORTION_UNITS = ['cup', 'can', 'oz', 'g', 'piece', 'scoop', 'pump'];
+
+  // Unit conversion constants for calorie calculations
+  const GRAMS_PER_OZ = 28.3495;
+  const GRAMS_PER_CUP: Record<ItemType, number> = {
+    dry: 120,
+    wet: 240,
+    raw: 225,
+    treat: 100,
+    supplement: 150,
+  };
+  const GRAMS_PER_CAN = 85;
+  const GRAMS_PER_PIECE = 30;
+
+  // Convert a serving unit to grams (for base calorie calculation)
+  function servingUnitToGrams(unit: string, foodType: ItemType, servingGrams: number | null): number {
+    if (servingGrams && (unit === 'cup' || unit === food?.serving_unit)) {
+      return servingGrams;
+    }
+    switch (unit) {
+      case 'cup':
+        return GRAMS_PER_CUP[foodType];
+      case 'can':
+        return GRAMS_PER_CAN;
+      case 'oz':
+        return GRAMS_PER_OZ;
+      case 'g':
+        return 1;
+      case 'piece':
+        return GRAMS_PER_PIECE;
+      case 'scoop':
+        return 15;
+      case 'pump':
+        return 5;
+      default:
+        return GRAMS_PER_CUP[foodType];
+    }
+  }
+
+  // Calculate calories for a given portion quantity and unit
+  function calculatePortionCalories(quantity: number, unit: string, foodItem: FoodItem): number {
+    // Get the food's base serving size in grams
+    const baseServingGrams = servingUnitToGrams(foodItem.serving_unit, foodItem.item_type, foodItem.serving_grams);
+
+    // Calculate calories per gram
+    const caloriesPerGram = foodItem.calories_per_unit / baseServingGrams;
+
+    // Get grams for the selected portion unit
+    const portionGrams = servingUnitToGrams(unit, foodItem.item_type, null) * quantity;
+
+    // Calculate total calories
+    return Math.round(caloriesPerGram * portionGrams);
+  }
 
   // Fetch food details
   useEffect(() => {
@@ -105,6 +161,7 @@ export default function FoodDetailPage() {
       }
 
       setFood(data);
+      setPortionUnit(data.serving_unit); // Default to food's serving unit
       setLoading(false);
     }
 
@@ -198,7 +255,7 @@ export default function FoodDetailPage() {
   };
 
   const handleAddToMeal = async () => {
-    if (!selectedPetId || !selectedMealId || !food || !portionAmount) return;
+    if (!selectedPetId || !selectedMealId || !food || !portionAmount || !portionUnit) return;
 
     const portion = parseFloat(portionAmount);
     if (isNaN(portion) || portion <= 0) {
@@ -206,8 +263,8 @@ export default function FoodDetailPage() {
       return;
     }
 
-    // Calculate calories for this portion
-    const calculatedCalories = food.calories_per_unit * portion;
+    // Calculate calories for this portion with unit conversion
+    const calculatedCalories = calculatePortionCalories(portion, portionUnit, food);
 
     // Get selected pet to check against daily calories
     const selectedPet = pets.find(p => p.id === selectedPetId);
@@ -222,7 +279,7 @@ export default function FoodDetailPage() {
 
     try {
       const supabase = createClient();
-      
+
       // Add item to meal_items table
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error } = await (supabase as any)
@@ -231,7 +288,7 @@ export default function FoodDetailPage() {
           meal_id: selectedMealId,
           item_id: food.id,
           portion_quantity: portion,
-          portion_unit: food.serving_unit,
+          portion_unit: portionUnit,
           calculated_calories: calculatedCalories,
         });
 
@@ -272,10 +329,6 @@ export default function FoodDetailPage() {
   };
 
   const canEdit = food && currentUserId && food.created_by === currentUserId;
-
-  const portionCalories = food && portionAmount 
-    ? (food.calories_per_unit * parseFloat(portionAmount || '0')).toFixed(0)
-    : '0';
 
   if (loading) {
     return (
@@ -421,23 +474,36 @@ export default function FoodDetailPage() {
             </select>
           </div>
 
-          {/* Portion Amount */}
+          {/* Portion Amount and Unit */}
           <div className="mb-4">
             <label className="block text-xs text-gray-500 uppercase tracking-wide mb-2">
-              Portion Amount ({food.serving_unit}s)
+              Portion Amount
             </label>
-            <input
-              type="number"
-              min="0.1"
-              step="0.1"
-              value={portionAmount}
-              onChange={(e) => setPortionAmount(e.target.value)}
-              placeholder="1"
-              className="w-full px-4 py-3 bg-white border border-gray-200 rounded-button text-charcoal focus:outline-none focus:border-deep-teal focus:ring-1 focus:ring-deep-teal"
-            />
-            {portionAmount && parseFloat(portionAmount) > 0 && (
+            <div className="flex gap-2">
+              <input
+                type="number"
+                min="0.1"
+                step="0.1"
+                value={portionAmount}
+                onChange={(e) => setPortionAmount(e.target.value)}
+                placeholder="1"
+                className="flex-1 px-4 py-3 bg-white border border-gray-200 rounded-button text-charcoal focus:outline-none focus:border-deep-teal focus:ring-1 focus:ring-deep-teal"
+              />
+              <select
+                value={portionUnit}
+                onChange={(e) => setPortionUnit(e.target.value)}
+                className="px-4 py-3 bg-white border border-gray-200 rounded-button text-charcoal focus:outline-none focus:border-deep-teal focus:ring-1 focus:ring-deep-teal"
+              >
+                {PORTION_UNITS.map(unit => (
+                  <option key={unit} value={unit}>
+                    {unit}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {portionAmount && parseFloat(portionAmount) > 0 && portionUnit && (
               <p className="text-xs text-gray-500 mt-1">
-                = {portionCalories} kcal
+                = {calculatePortionCalories(parseFloat(portionAmount), portionUnit, food)} kcal
               </p>
             )}
           </div>

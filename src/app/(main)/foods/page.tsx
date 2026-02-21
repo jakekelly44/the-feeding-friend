@@ -20,7 +20,6 @@ interface FoodItem {
   package_price: number | null;
   package_size: number | null;
   package_unit: string | null;
-  style: string;
   image_url: string | null;
 }
 
@@ -62,7 +61,7 @@ export default function FoodsPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await (supabase as any)
         .from('items')
-        .select('id, brand, name, item_type, calories_per_unit, serving_unit, serving_grams, package_price, package_size, package_unit, style, image_url')
+        .select('id, brand, name, item_type, calories_per_unit, serving_unit, serving_grams, package_price, package_size, package_unit, image_url')
         .order('use_count', { ascending: false })
         .order('brand', { ascending: true })
         .range(0, ITEMS_PER_PAGE - 1);
@@ -90,7 +89,7 @@ export default function FoodsPage() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (supabase as any)
       .from('items')
-      .select('id, brand, name, item_type, calories_per_unit, serving_unit, serving_grams, package_price, package_size, package_unit, style, image_url')
+      .select('id, brand, name, item_type, calories_per_unit, serving_unit, serving_grams, package_price, package_size, package_unit, image_url')
       .order('use_count', { ascending: false })
       .order('brand', { ascending: true })
       .range(start, end);
@@ -103,25 +102,111 @@ export default function FoodsPage() {
     setLoadingMore(false);
   };
 
+  // Unit conversion constants
+  const GRAMS_PER_OZ = 28.3495;
+  const GRAMS_PER_CUP: Record<ItemType, number> = {
+    dry: 120,
+    wet: 240,
+    raw: 225,
+    treat: 100,
+    supplement: 150,
+  };
+  const GRAMS_PER_CAN = 85;
+  const GRAMS_PER_PIECE = 30;
+
+  // Convert a food's serving unit to grams (for base calorie calculation)
+  // When serving_unit is 'g', calories_per_unit is per 1 gram
+  function servingUnitToGrams(unit: string, foodType: ItemType): number {
+    switch (unit) {
+      case 'cup':
+        return GRAMS_PER_CUP[foodType];
+      case 'can':
+        return GRAMS_PER_CAN;
+      case 'oz':
+        return GRAMS_PER_OZ;
+      case 'g':
+        return 1; // calories_per_unit is per 1 gram when serving_unit is 'g'
+      case 'piece':
+        return GRAMS_PER_PIECE;
+      case 'scoop':
+        return 15; // Approximate scoop size
+      case 'pump':
+        return 5; // Approximate pump size
+      default:
+        return GRAMS_PER_CUP[foodType];
+    }
+  }
+
+  // Convert display unit to grams (for showing calories/cost per selected unit)
+  // When display is 'g', we show per 100g
+  function displayUnitToGrams(unit: string, foodType: ItemType): number {
+    switch (unit) {
+      case 'cup':
+        return GRAMS_PER_CUP[foodType];
+      case 'can':
+        return GRAMS_PER_CAN;
+      case 'oz':
+        return GRAMS_PER_OZ;
+      case 'g':
+        return 100; // Display "per 100g"
+      case 'piece':
+        return GRAMS_PER_PIECE;
+      default:
+        return GRAMS_PER_CUP[foodType];
+    }
+  }
+
+  // Check if a display unit is compatible with a food's serving unit
+  // Can and Piece are only valid if the food was entered with that unit
+  function isUnitCompatible(food: FoodItem, displayUnit: string): boolean {
+    // Can and piece require the food to have been entered with that serving unit
+    if (displayUnit === 'can') {
+      return food.serving_unit === 'can';
+    }
+    if (displayUnit === 'piece') {
+      return food.serving_unit === 'piece';
+    }
+    // Other units (cup, oz, g) can be converted for any food
+    return true;
+  }
+
   // Calculate cost in selected unit
-  function calculateCostInUnit(food: FoodItem, unit: string): number | null {
+  function calculateCostInUnit(food: FoodItem, displayUnit: string): number | null {
     if (!food.package_price || !food.package_size || !food.package_unit) {
       return null;
     }
-    
+
     try {
-      const { grams } = convertToGrams(1, unit, food.style || food.item_type);
+      // Get grams for the display unit
+      const displayGrams = displayUnitToGrams(displayUnit, food.item_type);
+
       const { costPerGram } = calculateCostPerGram(
         food.package_price,
         food.package_size,
         food.package_unit,
-        food.style || food.item_type
+        food.item_type
       );
-      
-      return grams * costPerGram;
+
+      return displayGrams * costPerGram;
     } catch {
       return null;
     }
+  }
+
+  // Calculate calories in selected unit
+  function calculateCaloriesInUnit(food: FoodItem, displayUnit: string): number {
+    // Get the food's serving size in grams
+    // If serving_grams is provided, use it; otherwise convert serving_unit to grams
+    const servingGrams = food.serving_grams || servingUnitToGrams(food.serving_unit, food.item_type);
+
+    // Calculate calories per gram
+    const caloriesPerGram = food.calories_per_unit / servingGrams;
+
+    // Get grams for the display unit
+    const displayGrams = displayUnitToGrams(displayUnit, food.item_type);
+
+    // Calculate calories for the display unit
+    return Math.round(caloriesPerGram * displayGrams);
   }
 
   // Filter and search with sorting
@@ -208,7 +293,7 @@ export default function FoodsPage() {
         {/* Unit Selector & Sort */}
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div>
-            <label className="block text-xs text-gray-500 mb-1 font-medium">Display costs as:</label>
+            <label className="block text-xs text-gray-500 mb-1 font-medium">Display sizes as:</label>
             <select
               value={selectedDisplayUnit}
               onChange={(e) => setSelectedDisplayUnit(e.target.value)}
@@ -327,6 +412,14 @@ export default function FoodsPage() {
                     <p className="text-sm text-gray-500 truncate">{food.brand}</p>
                     {/* Show cost in selected unit */}
                     {(() => {
+                      // Check if unit is compatible with this food
+                      if (!isUnitCompatible(food, selectedDisplayUnit)) {
+                        return (
+                          <p className="text-xs text-gray-400 italic mt-0.5">
+                            Per {selectedDisplayUnit} data not available
+                          </p>
+                        );
+                      }
                       const cost = calculateCostInUnit(food, selectedDisplayUnit);
                       return cost ? (
                         <p className="text-xs text-deep-teal font-medium mt-0.5">
@@ -339,8 +432,14 @@ export default function FoodsPage() {
                   {/* Calories + Add Button */}
                   <div className="flex items-center gap-3">
                     <div className="text-right">
-                      <span className="font-semibold text-deep-teal">{food.calories_per_unit}</span>
-                      <p className="text-xs text-gray-400">kcal/{food.serving_unit}</p>
+                      {isUnitCompatible(food, selectedDisplayUnit) ? (
+                        <>
+                          <span className="font-semibold text-deep-teal">{calculateCaloriesInUnit(food, selectedDisplayUnit)}</span>
+                          <p className="text-xs text-gray-400">kcal/{selectedDisplayUnit === 'g' ? '100g' : selectedDisplayUnit}</p>
+                        </>
+                      ) : (
+                        <p className="text-xs text-gray-400 italic">N/A</p>
+                      )}
                     </div>
                     <button
                       onClick={(e) => handleAddToMeal(e, food.id)}

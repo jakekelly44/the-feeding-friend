@@ -18,7 +18,7 @@ interface Pet {
   activity_category: string | null;
   bcs: string;
   daily_calories: number;
-  calorie_override: number | null;
+  calories_override: number | null;
   calculation_breakdown: Record<string, { label: string; value: number }> | null;
   photo_url: string | null;
   priority: 'weight_control' | 'digestive_health' | 'ingredient_quality' | 'budget' | null;
@@ -185,10 +185,10 @@ export default function PetProfilePage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any)
         .from('pets')
-        .update({ calorie_override: override })
+        .update({ calories_override: override })
         .eq('id', pet.id);
       
-      setPet({ ...pet, calorie_override: override, daily_calories: override });
+      setPet({ ...pet, calories_override: override, daily_calories: override });
       setEditingCalories(false);
     } catch (err) {
       console.error('Error updating calories:', err);
@@ -204,7 +204,7 @@ export default function PetProfilePage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any)
         .from('pets')
-        .update({ calorie_override: null })
+        .update({ calories_override: null })
         .eq('id', pet.id);
       
       const breakdown = pet.calculation_breakdown;
@@ -216,7 +216,7 @@ export default function PetProfilePage() {
         : pet.daily_calories;
       const calculatedCalories = Math.round(rer * multiplier);
       
-      setPet({ ...pet, calorie_override: null, daily_calories: calculatedCalories });
+      setPet({ ...pet, calories_override: null, daily_calories: calculatedCalories });
     } catch (err) {
       console.error('Error resetting calories:', err);
     }
@@ -384,7 +384,7 @@ export default function PetProfilePage() {
               <div className="text-center mb-3">
                 <div className="text-3xl font-bold text-charcoal">{pet.daily_calories}</div>
                 <div className="text-sm text-gray-500">kcal / day</div>
-                {pet.calorie_override && (
+                {pet.calories_override && (
                   <div className="mt-2 flex items-center justify-center gap-2">
                     <span className="text-xs text-orange-500">✏️ Custom override</span>
                     <button

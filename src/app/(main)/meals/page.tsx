@@ -68,6 +68,65 @@ const FOOD_TYPE_STYLES: Record<string, { bg: string; emoji: string }> = {
   supplement: { bg: 'bg-blue-100', emoji: '💊' },
 };
 
+// Unit conversion constants for calorie calculations
+const GRAMS_PER_OZ = 28.3495;
+const GRAMS_PER_CUP_DRY = 120;
+const GRAMS_PER_CUP_WET = 240;
+const GRAMS_PER_CAN = 85;
+
+/**
+ * Convert portion to grams for calorie calculation
+ */
+function convertPortionToGrams(
+  quantity: number,
+  unit: string,
+  foodType: string,
+  servingGrams: number | null
+): number {
+  switch (unit.toLowerCase()) {
+    case 'g':
+      return quantity;
+    case 'oz':
+      return quantity * GRAMS_PER_OZ;
+    case 'cup':
+      if (servingGrams) return quantity * servingGrams;
+      return quantity * (foodType === 'wet' ? GRAMS_PER_CUP_WET : GRAMS_PER_CUP_DRY);
+    case 'can':
+      return quantity * GRAMS_PER_CAN;
+    case 'piece':
+    case 'scoop':
+    case 'pump':
+      if (servingGrams) return quantity * servingGrams;
+      return quantity * (foodType === 'wet' ? GRAMS_PER_CUP_WET : GRAMS_PER_CUP_DRY);
+    default:
+      return quantity;
+  }
+}
+
+/**
+ * Calculate calories with proper unit conversion
+ */
+function calculateCaloriesWithUnitConversion(
+  quantity: number,
+  currentUnit: string,
+  food: FoodItem
+): number {
+  const baseUnit = food.serving_unit;
+  const caloriesPerUnit = food.calories_per_unit;
+
+  // If same unit, simple multiplication
+  if (currentUnit === baseUnit) {
+    return Math.round(quantity * caloriesPerUnit);
+  }
+
+  // Different units - need conversion via grams
+  const portionGrams = convertPortionToGrams(quantity, currentUnit, food.item_type, food.serving_grams);
+  const baseUnitGrams = convertPortionToGrams(1, baseUnit, food.item_type, food.serving_grams);
+  const portionInBaseUnits = portionGrams / baseUnitGrams;
+
+  return Math.round(portionInBaseUnits * caloriesPerUnit);
+}
+
 export default function MealsPage() {
   const router = useRouter();
   
@@ -476,7 +535,8 @@ export default function MealsPage() {
 
     if (isNaN(quantity) || quantity <= 0) return;
 
-    const newCalories = calculateCalories(quantity, item.food.calories_per_unit);
+    // Use unit-aware calorie calculation
+    const newCalories = calculateCaloriesWithUnitConversion(quantity, unit, item.food);
 
     try {
       const supabase = createClient();

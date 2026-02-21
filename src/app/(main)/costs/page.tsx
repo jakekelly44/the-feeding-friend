@@ -38,7 +38,7 @@ interface MealFoodItem {
   calculated_calories: number;
   meal?: {
     id: string;
-    meal_type: string;
+    name: string;
   };
   food: FoodItem;
 }
@@ -125,11 +125,11 @@ export default function CostsPage() {
         return;
       }
 
-      // Get all meals with meal_type
+      // Get all meals with name
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: meals } = await (supabase as any)
         .from('meals')
-        .select('id, meal_type')
+        .select('id, name')
         .eq('meal_plan_id', mealPlan.id);
 
       if (!meals || meals.length === 0) {
@@ -147,7 +147,7 @@ export default function CostsPage() {
           *,
           meal:meals!inner (
             id,
-            meal_type
+            name
           ),
           food:items (
             id,
@@ -183,6 +183,7 @@ export default function CostsPage() {
       name: string;
       brand: string;
       type: string;
+      mealType: string;
       dailyCost: number;
       isEstimate: boolean;
     }> = [];
@@ -208,6 +209,7 @@ export default function CostsPage() {
           name: item.food.name,
           brand: item.food.brand,
           type: item.food.item_type,
+          mealType: item.meal?.name?.toLowerCase() || 'other',
           dailyCost: result.cost,
           isEstimate: result.isEstimate,
         });
@@ -473,10 +475,9 @@ export default function CostsPage() {
               <h2 className="font-semibold text-charcoal mb-4">Cost by Item</h2>
               
               {(() => {
-                // Group items by meal_type
+                // Group items by meal_type (using stored mealType, not index lookup)
                 const groupedByMeal = itemCosts.reduce((acc, item, index) => {
-                  const mealItem = mealItems[index];
-                  const mealType = mealItem?.meal?.meal_type || 'other';
+                  const mealType = item.mealType;
                   if (!acc[mealType]) {
                     acc[mealType] = [];
                   }
