@@ -36,6 +36,10 @@ interface MealFoodItem {
   portion_unit: string;
   portion_grams: number | null;
   calculated_calories: number;
+  meal?: {
+    id: string;
+    meal_type: string;
+  };
   food: FoodItem;
 }
 
@@ -121,11 +125,11 @@ export default function CostsPage() {
         return;
       }
 
-      // Get all meals
+      // Get all meals with meal_type
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: meals } = await (supabase as any)
         .from('meals')
-        .select('id')
+        .select('id, meal_type')
         .eq('meal_plan_id', mealPlan.id);
 
       if (!meals || meals.length === 0) {
@@ -134,13 +138,17 @@ export default function CostsPage() {
         return;
       }
 
-      // Get all meal items across all meals
+      // Get all meal items across all meals with meal info
       const mealIds = meals.map((m: any) => m.id);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: items } = await (supabase as any)
         .from('meal_items')
         .select(`
           *,
+          meal:meals!inner (
+            id,
+            meal_type
+          ),
           food:items (
             id,
             brand,
@@ -460,38 +468,89 @@ export default function CostsPage() {
               </div>
             </div>
 
-            {/* Cost by Item */}
+            {/* Cost by Item - GROUPED BY MEAL */}
             <div className="bg-white rounded-card p-4 shadow-card">
               <h2 className="font-semibold text-charcoal mb-4">Cost by Item</h2>
               
-              <div className="space-y-3">
-                {itemCosts.map((item, index) => {
-                  const periodCost = calculatePeriodCost(item.dailyCost, period);
-                  const barWidth = maxItemCost > 0 ? (item.dailyCost / maxItemCost) * 100 : 0;
+              {(() => {
+                // Group items by meal_type
+                const groupedByMeal = itemCosts.reduce((acc, item, index) => {
+                  const mealItem = mealItems[index];
+                  const mealType = mealItem?.meal?.meal_type || 'other';
+                  if (!acc[mealType]) {
+                    acc[mealType] = [];
+                  }
+                  acc[mealType].push({ ...item, index });
+                  return acc;
+                }, {} as Record<string, Array<typeof itemCosts[0] & { index: number }>>);
+                
+                // Meal order
+                const mealOrder = ['breakfast', 'lunch', 'dinner', 'treats', 'other'];
+                
+                // Meal labels with emojis
+                const mealLabels: Record<string, string> = {
+                  breakfast: '🍳 Breakfast',
+                  lunch: '🥗 Lunch',
+                  dinner: '🍽️ Dinner',
+                  treats: '🍪 Treats',
+                  other: '📦 Other',
+                };
+                
+                return mealOrder.map(mealType => {
+                  const items = groupedByMeal[mealType];
+                  if (!items || items.length === 0) return null;
+                  
+                  // Calculate meal subtotal
+                  const mealSubtotal = items.reduce((sum, item) => {
+                    const periodCost = calculatePeriodCost(item.dailyCost, period);
+                    return sum + periodCost;
+                  }, 0);
                   
                   return (
-                    <div key={index}>
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-charcoal text-sm truncate">{item.name}</p>
-                          <p className="text-xs text-gray-500 truncate">{item.brand}</p>
-                        </div>
-                        <span className="font-bold text-charcoal ml-3">{formatCost(periodCost)}</span>
+                    <div key={mealType} className="mb-6 last:mb-0">
+                      {/* Meal Header */}
+                      <div className="flex items-center justify-between mb-3 pb-2 border-b-2 border-gray-200">
+                        <h3 className="font-semibold text-deep-teal text-base">
+                          {mealLabels[mealType]}
+                        </h3>
+                        <span className="text-sm font-bold text-deep-teal">
+                          {formatCost(mealSubtotal)}
+                        </span>
                       </div>
                       
-                      <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-300"
-                          style={{
-                            width: `${barWidth}%`,
-                            backgroundColor: FOOD_TYPE_COLORS[item.type] || '#6B7280',
-                          }}
-                        />
+                      {/* Items in this meal */}
+                      <div className="space-y-3">
+                        {items.map((item) => {
+                          const periodCost = calculatePeriodCost(item.dailyCost, period);
+                          const barWidth = maxItemCost > 0 ? (item.dailyCost / maxItemCost) * 100 : 0;
+                          
+                          return (
+                            <div key={item.index}>
+                              <div className="flex items-center justify-between mb-1">
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium text-charcoal text-sm truncate">{item.name}</p>
+                                  <p className="text-xs text-gray-500 truncate">{item.brand}</p>
+                                </div>
+                                <span className="font-bold text-charcoal ml-3">{formatCost(periodCost)}</span>
+                              </div>
+                              
+                              <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full rounded-full transition-all duration-300"
+                                  style={{
+                                    width: `${barWidth}%`,
+                                    backgroundColor: FOOD_TYPE_COLORS[item.type] || '#6B7280',
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   );
-                })}
-              </div>
+                }).filter(Boolean);
+              })()}
             </div>
           </>
         )}

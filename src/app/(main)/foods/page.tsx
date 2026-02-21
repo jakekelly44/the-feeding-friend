@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Plus } from 'lucide-react';
+import { Search, Plus, ScanLine } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { convertToGrams, calculateCostPerGram } from '@/lib/cost-utils';
 
 type ItemType = 'dry' | 'wet' | 'raw' | 'treat' | 'supplement';
 type FilterType = 'all' | ItemType;
@@ -15,6 +16,11 @@ interface FoodItem {
   item_type: ItemType;
   calories_per_unit: number;
   serving_unit: string;
+  serving_grams: number | null;
+  package_price: number | null;
+  package_size: number | null;
+  package_unit: string | null;
+  style: string;
   image_url: string | null;
 }
 
@@ -43,6 +49,8 @@ export default function FoodsPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
+  const [selectedDisplayUnit, setSelectedDisplayUnit] = useState<string>('cup');
+  const [sortBy, setSortBy] = useState<'name' | 'cost' | 'calories'>('name');
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const ITEMS_PER_PAGE = 25;
@@ -54,7 +62,7 @@ export default function FoodsPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await (supabase as any)
         .from('items')
-        .select('id, brand, name, item_type, calories_per_unit, serving_unit, image_url')
+        .select('id, brand, name, item_type, calories_per_unit, serving_unit, serving_grams, package_price, package_size, package_unit, style, image_url')
         .order('use_count', { ascending: false })
         .order('brand', { ascending: true })
         .range(0, ITEMS_PER_PAGE - 1);
@@ -82,7 +90,7 @@ export default function FoodsPage() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (supabase as any)
       .from('items')
-      .select('id, brand, name, item_type, calories_per_unit, serving_unit, image_url')
+      .select('id, brand, name, item_type, calories_per_unit, serving_unit, serving_grams, package_price, package_size, package_unit, style, image_url')
       .order('use_count', { ascending: false })
       .order('brand', { ascending: true })
       .range(start, end);
@@ -95,7 +103,28 @@ export default function FoodsPage() {
     setLoadingMore(false);
   };
 
-  // Filter and search
+  // Calculate cost in selected unit
+  function calculateCostInUnit(food: FoodItem, unit: string): number | null {
+    if (!food.package_price || !food.package_size || !food.package_unit) {
+      return null;
+    }
+    
+    try {
+      const { grams } = convertToGrams(1, unit, food.style || food.item_type);
+      const { costPerGram } = calculateCostPerGram(
+        food.package_price,
+        food.package_size,
+        food.package_unit,
+        food.style || food.item_type
+      );
+      
+      return grams * costPerGram;
+    } catch {
+      return null;
+    }
+  }
+
+  // Filter and search with sorting
   const filteredFoods = useMemo(() => {
     let result = foods;
 
@@ -114,8 +143,31 @@ export default function FoodsPage() {
       );
     }
 
-    return result;
-  }, [foods, activeFilter, searchQuery]);
+    // Apply sorting
+    const sorted = [...result].sort((a, b) => {
+      switch (sortBy) {
+        case 'name':
+          return a.name.localeCompare(b.name);
+        
+        case 'cost':
+          const costA = calculateCostInUnit(a, selectedDisplayUnit);
+          const costB = calculateCostInUnit(b, selectedDisplayUnit);
+          // Items without cost go to end
+          if (costA === null && costB === null) return 0;
+          if (costA === null) return 1;
+          if (costB === null) return -1;
+          return costA - costB;
+        
+        case 'calories':
+          return a.calories_per_unit - b.calories_per_unit;
+        
+        default:
+          return 0;
+      }
+    });
+
+    return sorted;
+  }, [foods, activeFilter, searchQuery, sortBy, selectedDisplayUnit]);
 
   const handleFoodClick = (foodId: string) => {
     router.push(`/foods/${foodId}`);
@@ -151,6 +203,37 @@ export default function FoodsPage() {
             placeholder="Search foods..."
             className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-button text-charcoal placeholder:text-gray-400 focus:outline-none focus:border-deep-teal focus:ring-1 focus:ring-deep-teal"
           />
+        </div>
+
+        {/* Unit Selector & Sort */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1 font-medium">Display costs as:</label>
+            <select
+              value={selectedDisplayUnit}
+              onChange={(e) => setSelectedDisplayUnit(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-button bg-white focus:border-deep-teal focus:ring-1 focus:ring-deep-teal outline-none"
+            >
+              <option value="cup">Per Cup</option>
+              <option value="can">Per Can</option>
+              <option value="oz">Per Ounce</option>
+              <option value="g">Per 100g</option>
+              <option value="piece">Per Piece</option>
+            </select>
+          </div>
+          
+          <div>
+            <label className="block text-xs text-gray-500 mb-1 font-medium">Sort by:</label>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'name' | 'cost' | 'calories')}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-button bg-white focus:border-deep-teal focus:ring-1 focus:ring-deep-teal outline-none"
+            >
+              <option value="name">Name (A-Z)</option>
+              <option value="cost">Cost (Low to High)</option>
+              <option value="calories">Calories</option>
+            </select>
+          </div>
         </div>
 
         {/* Filter Pills */}
@@ -242,6 +325,15 @@ export default function FoodsPage() {
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-charcoal truncate">{food.name}</h3>
                     <p className="text-sm text-gray-500 truncate">{food.brand}</p>
+                    {/* Show cost in selected unit */}
+                    {(() => {
+                      const cost = calculateCostInUnit(food, selectedDisplayUnit);
+                      return cost ? (
+                        <p className="text-xs text-deep-teal font-medium mt-0.5">
+                          ${cost.toFixed(2)}/{selectedDisplayUnit}
+                        </p>
+                      ) : null;
+                    })()}
                   </div>
 
                   {/* Calories + Add Button */}

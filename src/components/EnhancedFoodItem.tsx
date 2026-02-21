@@ -10,6 +10,7 @@ interface FoodItem {
   item_type: string;
   calories_per_unit: number;
   serving_unit: string;
+  serving_grams: number | null;
   image_url: string | null;
 }
 
@@ -43,6 +44,84 @@ const FOOD_TYPE_STYLES: Record<string, { bg: string; emoji: string }> = {
 
 const SERVING_UNITS = ['cup', 'can', 'oz', 'g', 'piece', 'scoop', 'pump'];
 
+// Unit conversion constants
+const GRAMS_PER_OZ = 28.3495;
+const GRAMS_PER_CUP_DRY = 120;
+const GRAMS_PER_CUP_WET = 240;
+const GRAMS_PER_CAN = 85; // Typical 3oz can
+
+/**
+ * Convert portion to grams for calorie calculation
+ */
+function convertToGrams(
+  quantity: number,
+  unit: string,
+  foodType: string,
+  servingGrams: number | null
+): number {
+  switch (unit.toLowerCase()) {
+    case 'g':
+      return quantity;
+    
+    case 'oz':
+      return quantity * GRAMS_PER_OZ;
+    
+    case 'cup':
+      // Use serving_grams if available, otherwise estimate by food type
+      if (servingGrams) {
+        return quantity * servingGrams;
+      }
+      return quantity * (foodType === 'wet' ? GRAMS_PER_CUP_WET : GRAMS_PER_CUP_DRY);
+    
+    case 'can':
+      // Estimate: 1 can = 3oz = ~85g
+      return quantity * GRAMS_PER_CAN;
+    
+    case 'piece':
+    case 'scoop':
+    case 'pump':
+      // Use serving_grams if available, otherwise can't convert accurately
+      if (servingGrams) {
+        return quantity * servingGrams;
+      }
+      // Fallback: assume 1 piece/scoop/pump = 1 serving unit
+      return quantity * (foodType === 'wet' ? GRAMS_PER_CUP_WET : GRAMS_PER_CUP_DRY);
+    
+    default:
+      return quantity;
+  }
+}
+
+/**
+ * Calculate calories with proper unit conversion
+ */
+function calculateCalories(
+  quantity: number,
+  currentUnit: string,
+  food: FoodItem
+): number {
+  const baseUnit = food.serving_unit; // Unit that calories_per_unit is measured in
+  const caloriesPerUnit = food.calories_per_unit;
+  
+  // If same unit, simple multiplication
+  if (currentUnit === baseUnit) {
+    return Math.round(quantity * caloriesPerUnit);
+  }
+  
+  // Different units - need conversion via grams
+  // 1. Convert current portion to grams
+  const portionGrams = convertToGrams(quantity, currentUnit, food.item_type, food.serving_grams);
+  
+  // 2. Convert base unit (1 serving) to grams
+  const baseUnitGrams = convertToGrams(1, baseUnit, food.item_type, food.serving_grams);
+  
+  // 3. Calculate how many base units the portion represents
+  const portionInBaseUnits = portionGrams / baseUnitGrams;
+  
+  // 4. Calculate calories
+  return Math.round(portionInBaseUnits * caloriesPerUnit);
+}
+
 export default function EnhancedFoodItem({ item, mealId, onPortionChange, onDelete, onClick }: Props) {
   const [quantity, setQuantity] = useState(item.portion_quantity);
   const [unit, setUnit] = useState(item.portion_unit);
@@ -50,13 +129,11 @@ export default function EnhancedFoodItem({ item, mealId, onPortionChange, onDele
   
   const style = FOOD_TYPE_STYLES[item.food.item_type] || FOOD_TYPE_STYLES.dry;
   
-  // Calculate calories based on quantity
+  // Recalculate calories when quantity or unit changes
   useEffect(() => {
-    // Simple proportional calculation
-    const ratio = quantity / item.portion_quantity;
-    const newCalories = Math.round(item.calculated_calories * ratio);
+    const newCalories = calculateCalories(quantity, unit, item.food);
     setCalories(newCalories);
-  }, [quantity, item]);
+  }, [quantity, unit, item.food]);
   
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newQuantity = parseFloat(e.target.value);
@@ -74,20 +151,21 @@ export default function EnhancedFoodItem({ item, mealId, onPortionChange, onDele
   };
   
   // Determine slider range based on typical portions
+  // ALL units now use 0.25 increments (except g and piece)
   const getSliderConfig = () => {
     switch (unit) {
       case 'cup':
         return { max: 5, step: 0.25 };
       case 'can':
-        return { max: 3, step: 0.5 };
+        return { max: 3, step: 0.25 }; // FIXED: was 0.5
       case 'oz':
-        return { max: 20, step: 0.5 };
+        return { max: 20, step: 0.25 }; // FIXED: was 0.5
       case 'g':
         return { max: 500, step: 10 };
       case 'piece':
         return { max: 20, step: 1 };
       case 'scoop':
-        return { max: 10, step: 0.5 };
+        return { max: 10, step: 0.25 };
       case 'pump':
         return { max: 10, step: 1 };
       default:
@@ -96,6 +174,17 @@ export default function EnhancedFoodItem({ item, mealId, onPortionChange, onDele
   };
   
   const { max, step } = getSliderConfig();
+  
+  // Format display based on unit type
+  const formatQuantity = () => {
+    if (unit === 'piece' || unit === 'pump') {
+      return quantity.toFixed(0);
+    } else if (unit === 'g') {
+      return quantity.toFixed(0);
+    } else {
+      return quantity.toFixed(2);
+    }
+  };
   
   return (
     <div 
@@ -135,7 +224,7 @@ export default function EnhancedFoodItem({ item, mealId, onPortionChange, onDele
               ))}
             </select>
             <span className="text-xs text-gray-600 font-medium">
-              {unit === 'piece' ? quantity.toFixed(0) : quantity.toFixed(2)} {unit}
+              {formatQuantity()} {unit}
             </span>
           </div>
           

@@ -606,35 +606,55 @@ export default function MealsPage() {
     <>
       <style jsx global>{`
         @media print {
-          .no-print {
-            display: none !important;
+          /* Page setup - FIX FOR BLANK FIRST PAGE */
+          @page {
+            margin: 0.5in;
+            size: auto;
+          }
+          
+          @page :first {
+            margin-top: 0.5in;
           }
           
           body {
+            margin: 0;
+            padding: 0;
             print-color-adjust: exact;
             -webkit-print-color-adjust: exact;
             background: white !important;
           }
           
-          .print-only {
-            display: block !important;
-          }
-          
+          /* Prevent blank first page */
           .print-container {
+            page-break-before: avoid !important;
+            page-break-inside: avoid;
             max-width: 600px;
-            margin: 40px auto;
+            margin: 0 auto;
             padding: 40px;
             border: 3px solid #000;
             border-radius: 24px;
           }
           
           .print-meal-plan {
+            page-break-before: avoid !important;
             page-break-inside: avoid;
+          }
+          
+          .no-print {
+            display: none !important;
+          }
+          
+          .print-only {
+            display: block !important;
           }
           
           .print-meal-section {
             page-break-inside: avoid;
             margin-bottom: 24px;
+          }
+          
+          .print-food-item {
+            page-break-inside: avoid;
           }
           
           input {
@@ -647,6 +667,16 @@ export default function MealsPage() {
           /* Hide screen-only elements */
           .screen-only {
             display: none !important;
+          }
+          
+          /* Ensure colors print correctly */
+          .bg-deep-teal {
+            background-color: #2d7d7b !important;
+            color: white !important;
+          }
+          
+          .text-deep-teal {
+            color: #2d7d7b !important;
           }
         }
         
