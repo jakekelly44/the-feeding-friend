@@ -21,6 +21,7 @@ interface Pet {
   species: string;
   breed: string | null;
   daily_calories: number;
+  calories_override: number | null;
   photo_url: string | null;
 }
 
@@ -152,6 +153,10 @@ export default function MealsPage() {
 
   const currentPet = pets[currentPetIndex];
 
+  // Effective calories: use override if set, otherwise use calculated daily_calories
+  const effectiveCalories = currentPet?.calories_override ?? currentPet?.daily_calories ?? 0;
+  const hasOverride = currentPet?.calories_override !== null && currentPet?.calories_override !== undefined;
+
   // Fetch user's pets
   useEffect(() => {
     async function fetchPets() {
@@ -166,7 +171,7 @@ export default function MealsPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await (supabase as any)
         .from('pets')
-        .select('id, name, species, breed, daily_calories, photo_url')
+        .select('id, name, species, breed, daily_calories, calories_override, photo_url')
         .eq('user_id', user.id)
         .order('name', { ascending: true });
 
@@ -836,7 +841,12 @@ export default function MealsPage() {
               {currentPet?.breed?.replace(/-/g, ' ') || currentPet?.species}
             </p>
             <div className="inline-block border-2 border-black rounded-lg px-6 py-3">
-              <span className="font-bold">Daily Target: {currentPet?.daily_calories} kcal</span>
+              <span className="font-bold">Daily Target: {effectiveCalories} kcal</span>
+              {hasOverride && (
+                <span className="block text-sm text-gray-500 mt-1">
+                  (Calculated: {currentPet?.daily_calories} kcal)
+                </span>
+              )}
             </div>
           </div>
 
@@ -902,7 +912,12 @@ export default function MealsPage() {
               </button>
               <div className="text-right">
                 <div className="text-xs text-gray-500 uppercase tracking-wide">Daily Target</div>
-                <div className="text-lg font-bold text-deep-teal">{currentPet?.daily_calories} kcal</div>
+                <div className="text-lg font-bold text-deep-teal">{effectiveCalories} kcal</div>
+                {hasOverride && (
+                  <div className="text-xs text-gray-400">
+                    Calculated: {currentPet?.daily_calories} kcal
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -918,7 +933,10 @@ export default function MealsPage() {
                 <ChevronLeft className="w-5 h-5" />
               </button>
               
-              <div className="text-center">
+              <div
+                className="text-center cursor-pointer hover:opacity-80 transition-opacity"
+                onClick={() => currentPet && router.push(`/pets/${currentPet.id}`)}
+              >
                 <div className="w-16 h-16 mx-auto rounded-full bg-soft-peach-100 flex items-center justify-center mb-2 relative">
                   {currentPet?.photo_url ? (
                     <img src={currentPet.photo_url} alt={currentPet.name} className="w-full h-full rounded-full object-cover" />
@@ -945,16 +963,16 @@ export default function MealsPage() {
           <div className="mt-4">
             <div className="flex items-center justify-between text-xs mb-1">
               <span className="text-gray-500">{totalCalories} kcal</span>
-              <span className="text-gray-500">{currentPet && Math.round((totalCalories / currentPet.daily_calories) * 100)}%</span>
+              <span className="text-gray-500">{effectiveCalories > 0 && Math.round((totalCalories / effectiveCalories) * 100)}%</span>
             </div>
             <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
               <div
                 className={`h-full transition-all duration-300 ${
-                  totalCalories > (currentPet?.daily_calories || 0) ? 'bg-red-500' :
-                  totalCalories >= (currentPet?.daily_calories || 0) * 0.9 ? 'bg-green-500' :
+                  totalCalories > effectiveCalories ? 'bg-red-500' :
+                  totalCalories >= effectiveCalories * 0.9 ? 'bg-green-500' :
                   'bg-deep-teal'
                 }`}
-                style={{ width: `${Math.min(100, (totalCalories / (currentPet?.daily_calories || 1)) * 100)}%` }}
+                style={{ width: `${Math.min(100, (totalCalories / (effectiveCalories || 1)) * 100)}%` }}
               />
             </div>
           </div>
@@ -1096,8 +1114,8 @@ export default function MealsPage() {
             <div className="text-center">
               <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Kcal</div>
               <div className={`text-xl font-bold ${
-                totalCalories > (currentPet?.daily_calories || 0) * 1.1 ? 'text-red-500' :
-                totalCalories < (currentPet?.daily_calories || 0) * 0.9 ? 'text-orange-500' :
+                totalCalories > effectiveCalories * 1.1 ? 'text-red-500' :
+                totalCalories < effectiveCalories * 0.9 ? 'text-orange-500' :
                 'text-green-600'
               }`}>
                 {totalCalories}

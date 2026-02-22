@@ -8,7 +8,11 @@ export const CONVERSIONS = {
   LB_TO_G: 453.592,
   KG_TO_G: 1000,
   OZ_TO_G: 28.3495,
-  
+
+  // Approximate unit to gram conversions
+  CAN_TO_G: 85,    // Standard 3oz can
+  PIECE_TO_G: 30,  // Approximate grams per piece/treat
+
   // Approximate cup to gram conversions by food type
   // These are estimates based on food density
   CUP_TO_G: {
@@ -50,6 +54,14 @@ export function convertToGrams(
         ? CONVERSIONS.CUP_TO_G[foodType as keyof typeof CONVERSIONS.CUP_TO_G]
         : 150; // Default estimate
       grams = size * cupWeight;
+      isEstimate = true;
+      break;
+    case 'can':
+      grams = size * CONVERSIONS.CAN_TO_G;
+      isEstimate = true;
+      break;
+    case 'piece':
+      grams = size * CONVERSIONS.PIECE_TO_G;
       isEstimate = true;
       break;
     default:
