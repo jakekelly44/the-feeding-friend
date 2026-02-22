@@ -79,13 +79,15 @@ export default function PetProfilePage() {
       
       // Dynamic import to avoid SSR issues with jspdf
       const { generateFeedingPlanPDF } = await import('@/lib/pdf-generator');
+      // Use override if set, otherwise use calculated daily_calories
+      const effectiveDailyCalories = pet.calories_override ?? pet.daily_calories;
       generateFeedingPlanPDF({
         petName: pet.name,
         species: pet.species,
         breed: pet.breed,
         weight: pet.weight_value,
         weightUnit: pet.weight_unit,
-        dailyCalories: pet.daily_calories,
+        dailyCalories: effectiveDailyCalories,
         breakdown: pet.calculation_breakdown,
         priority: pet.priority || 'weight_control',
         recommendations: recommendations,
@@ -266,11 +268,15 @@ export default function PetProfilePage() {
   if (!pet) return null;
 
   const breakdown = pet.calculation_breakdown;
-  const multiplier = breakdown 
+  const multiplier = breakdown
     ? Object.values(breakdown).reduce((a, b) => a * (b?.value || 1), 1)
     : 1;
-  const rer = breakdown ? Math.round(pet.daily_calories / multiplier) : 0;
+  // Use the original daily_calories for RER calculation (this is the calculated value)
+  const baseCalories = pet.daily_calories;
+  const rer = breakdown ? Math.round(baseCalories / multiplier) : 0;
   const calculatedCalories = Math.round(rer * multiplier);
+  // Effective calories is the override if set, otherwise the calculated value
+  const effectiveCalories = pet.calories_override ?? calculatedCalories;
 
   return (
     <div className="min-h-screen bg-light-cream pb-8">
@@ -286,27 +292,25 @@ export default function PetProfilePage() {
         </button>
       </div>
 
-      {/* Pet Info */}
+      {/* Pet Info with Photo */}
       <div className="px-6 text-center mb-6">
-        <div className="w-24 h-24 mx-auto rounded-full bg-soft-peach-100 flex items-center justify-center mb-4">
+        <div className="w-24 h-24 mx-auto rounded-full bg-soft-peach-100 flex items-center justify-center overflow-hidden mb-2">
           {pet.photo_url ? (
             <img src={pet.photo_url} alt={pet.name} className="w-full h-full rounded-full object-cover" />
           ) : (
             <PawPrint className="w-12 h-12 text-soft-peach" />
           )}
         </div>
-        <h1 className="text-xl font-bold text-charcoal">{pet.name}</h1>
+        <div className="flex justify-center">
+          <PhotoUpload
+            currentPhotoUrl={pet.photo_url}
+            onUploadComplete={handlePhotoUpload}
+            bucket="pet-photos"
+            buttonOnly
+          />
+        </div>
+        <h1 className="text-xl font-bold text-charcoal mt-2">{pet.name}</h1>
         <p className="text-gray-500 capitalize">{pet.breed?.replace(/-/g, ' ') || pet.species}</p>
-      </div>
-
-      {/* Photo Upload */}
-      <div className="px-6 mb-6">
-        <PhotoUpload
-          currentPhotoUrl={pet.photo_url}
-          onUploadComplete={handlePhotoUpload}
-          bucket="pet-photos"
-          size="large"
-        />
       </div>
 
       {/* Stats Grid */}
@@ -339,7 +343,7 @@ export default function PetProfilePage() {
             {!editingCalories && (
               <button
                 onClick={() => {
-                  setCalorieOverride(pet.daily_calories.toString());
+                  setCalorieOverride(effectiveCalories.toString());
                   setEditingCalories(true);
                 }}
                 className="text-sm text-deep-teal font-medium flex items-center gap-1"
@@ -382,7 +386,7 @@ export default function PetProfilePage() {
           ) : (
             <>
               <div className="text-center mb-3">
-                <div className="text-3xl font-bold text-charcoal">{pet.daily_calories}</div>
+                <div className="text-3xl font-bold text-charcoal">{effectiveCalories}</div>
                 <div className="text-sm text-gray-500">kcal / day</div>
                 {pet.calories_override && (
                   <div className="mt-2 flex items-center justify-center gap-2">
@@ -487,7 +491,7 @@ export default function PetProfilePage() {
         </div>
 
         {/* Meal Configuration */}
-        <MealConfigurationSection petId={pet.id} dailyCalories={pet.daily_calories} />
+        <MealConfigurationSection petId={pet.id} dailyCalories={effectiveCalories} />
 
         {/* PDF Download */}
         <button

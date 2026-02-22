@@ -80,7 +80,7 @@ export default async function HomePage() {
               </div>
               <div className="text-center">
                 <p className="text-xs text-gray-400">Target</p>
-                <p className="font-bold text-green-600">{pet.daily_calories} kcal</p>
+                <p className="font-bold text-green-600">{pet.calories_override ?? pet.daily_calories} kcal</p>
               </div>
               <div className="text-center">
                 <p className="text-xs text-gray-400">Weight</p>

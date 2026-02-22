@@ -11,6 +11,7 @@ interface PhotoUploadProps {
   bucket: 'pet-photos' | 'user-photos' | 'food-photos';
   className?: string;
   size?: 'small' | 'medium' | 'large';
+  buttonOnly?: boolean;
 }
 
 export default function PhotoUpload({
@@ -19,6 +20,7 @@ export default function PhotoUpload({
   bucket,
   className = '',
   size = 'medium',
+  buttonOnly = false,
 }: PhotoUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(currentPhotoUrl || null);
@@ -111,6 +113,34 @@ export default function PhotoUpload({
     }
   };
 
+  // Button-only mode: just show the upload button
+  if (buttonOnly) {
+    return (
+      <div className={className}>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFileSelect}
+          className="hidden"
+        />
+
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-deep-teal hover:text-deep-teal-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          <Camera className="w-3.5 h-3.5" />
+          {uploading ? 'Uploading...' : (currentPhotoUrl ? 'Change Photo' : 'Add Photo')}
+        </button>
+
+        {error && (
+          <p className="text-xs text-red-500 mt-1">{error}</p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className={className}>
       <div className="flex flex-col items-center gap-3">
@@ -135,7 +165,7 @@ export default function PhotoUpload({
           ) : (
             <Camera className="w-8 h-8 text-gray-400" />
           )}
-          
+
           {uploading && (
             <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
               <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -151,7 +181,7 @@ export default function PhotoUpload({
           onChange={handleFileSelect}
           className="hidden"
         />
-        
+
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}

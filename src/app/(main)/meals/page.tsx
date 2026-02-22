@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Search, Plus, X, ChevronLeft, ChevronRight, Trash2, ChevronDown, ChevronUp, Printer } from 'lucide-react';
+import { Search, Plus, X, ChevronLeft, ChevronRight, Trash2, ChevronDown, ChevronUp, Printer, GripVertical } from 'lucide-react';
 import {
   formatPortion,
   parseFraction,
@@ -145,6 +145,10 @@ export default function MealsPage() {
   const [availableFoods, setAvailableFoods] = useState<FoodItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [addingFood, setAddingFood] = useState(false);
+
+  // Drag and drop state
+  const [draggedItem, setDraggedItem] = useState<MealFoodItem | null>(null);
+  const [dragOverMealId, setDragOverMealId] = useState<string | null>(null);
 
   const currentPet = pets[currentPetIndex];
 
@@ -589,6 +593,81 @@ export default function MealsPage() {
     router.push(`/foods/${foodId}`);
   };
 
+  // Drag and drop handlers
+  const handleDragStart = (e: React.DragEvent, item: MealFoodItem) => {
+    setDraggedItem(item);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', item.id);
+    // Add a slight delay to show the drag visual
+    setTimeout(() => {
+      (e.target as HTMLElement).style.opacity = '0.5';
+    }, 0);
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    setDraggedItem(null);
+    setDragOverMealId(null);
+    (e.target as HTMLElement).style.opacity = '1';
+  };
+
+  const handleDragOver = (e: React.DragEvent, mealId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (draggedItem && draggedItem.meal_id !== mealId) {
+      setDragOverMealId(mealId);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    // Only clear if we're leaving the drop zone entirely
+    const relatedTarget = e.relatedTarget as HTMLElement;
+    if (!relatedTarget || !e.currentTarget.contains(relatedTarget)) {
+      setDragOverMealId(null);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetMealId: string) => {
+    e.preventDefault();
+    setDragOverMealId(null);
+
+    if (!draggedItem || draggedItem.meal_id === targetMealId) {
+      setDraggedItem(null);
+      return;
+    }
+
+    const sourceMealId = draggedItem.meal_id;
+    const itemId = draggedItem.id;
+
+    try {
+      const supabase = createClient();
+
+      // Update the meal_id of the dragged item
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('meal_items')
+        .update({ meal_id: targetMealId })
+        .eq('id', itemId);
+
+      // Update local state - remove from source meal
+      const sourceItems = mealItems[sourceMealId] || [];
+      const movedItem = sourceItems.find(i => i.id === itemId);
+
+      if (movedItem) {
+        // Remove from source
+        setMealItems(prev => ({
+          ...prev,
+          [sourceMealId]: prev[sourceMealId].filter(i => i.id !== itemId),
+          [targetMealId]: [...(prev[targetMealId] || []), { ...movedItem, meal_id: targetMealId }],
+        }));
+      }
+    } catch (err) {
+      console.error('Error moving item:', err);
+      alert('Failed to move item. Please try again.');
+    }
+
+    setDraggedItem(null);
+  };
+
   // Calculate totals across all meals
   const allMealItems = Object.values(mealItems).flat();
   const totalCalories = allMealItems.reduce((sum, item) => sum + item.calculated_calories, 0);
@@ -901,7 +980,15 @@ export default function MealsPage() {
               const progress = (mealTotal / meal.target_calories) * 100;
 
               return (
-                <div key={meal.id} className="bg-white rounded-card shadow-card overflow-hidden">
+                <div
+                  key={meal.id}
+                  className={`bg-white rounded-card shadow-card overflow-hidden transition-all ${
+                    dragOverMealId === meal.id && !isExpanded ? 'ring-2 ring-deep-teal ring-offset-2' : ''
+                  }`}
+                  onDragOver={(e) => !isExpanded && handleDragOver(e, meal.id)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => !isExpanded && handleDrop(e, meal.id)}
+                >
                   {/* Meal Header */}
                   <button
                     onClick={() => toggleMeal(meal.id)}
@@ -939,23 +1026,48 @@ export default function MealsPage() {
                     </div>
                   </div>
 
-                  {/* Expanded Content */}
+                  {/* Expanded Content - Drop Zone */}
                   {isExpanded && (
-                    <div className="border-t border-gray-100 p-4 space-y-3">
+                    <div
+                      className={`border-t border-gray-100 p-4 space-y-3 transition-colors ${
+                        dragOverMealId === meal.id ? 'bg-deep-teal-50 border-2 border-dashed border-deep-teal' : ''
+                      }`}
+                      onDragOver={(e) => handleDragOver(e, meal.id)}
+                      onDragLeave={handleDragLeave}
+                      onDrop={(e) => handleDrop(e, meal.id)}
+                    >
                       {items.length === 0 ? (
-                        <p className="text-center text-gray-400 text-sm italic py-6">No food added yet</p>
+                        <p className={`text-center text-sm italic py-6 ${
+                          dragOverMealId === meal.id ? 'text-deep-teal' : 'text-gray-400'
+                        }`}>
+                          {dragOverMealId === meal.id ? 'Drop here to add' : 'No food added yet'}
+                        </p>
                       ) : (
                         items.map((item) => {
                           const style = FOOD_TYPE_STYLES[item.food.item_type] || FOOD_TYPE_STYLES.dry;
                           return (
-                            <EnhancedFoodItem
+                            <div
                               key={item.id}
-                              item={item}
-                              mealId={meal.id}
-                              onPortionChange={handlePortionChange}
-                              onDelete={handleDeleteItem}
-                              onClick={() => handleFoodClick(item.food.id)}
-                            />
+                              className={`relative flex items-start gap-1 ${draggedItem?.id === item.id ? 'opacity-50' : ''}`}
+                            >
+                              <div
+                                draggable
+                                onDragStart={(e) => handleDragStart(e, item)}
+                                onDragEnd={handleDragEnd}
+                                className="flex-shrink-0 cursor-grab active:cursor-grabbing p-1 text-gray-300 hover:text-gray-500 mt-3"
+                              >
+                                <GripVertical className="w-4 h-4" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <EnhancedFoodItem
+                                  item={item}
+                                  mealId={meal.id}
+                                  onPortionChange={handlePortionChange}
+                                  onDelete={handleDeleteItem}
+                                  onClick={() => handleFoodClick(item.food.id)}
+                                />
+                              </div>
+                            </div>
                           );
                         })
                       )}
